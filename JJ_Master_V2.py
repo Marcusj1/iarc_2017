@@ -13,37 +13,23 @@ import time
 class Master():
 
     def __init__(self):
-
-
-        ################# Program variables
-        self.program = [
-            [ 0 ],
-            [ 0 ],
-            [ 2 ],
-            [ 6 ],
-            [ 4 ],
-            [ 5 ],
-            [ 2 ],
-            [ 4 ],
-            [ 5 ],
-            [ 2 ],
-            [ 1 ],
-            [ 3 ],
-        ]
-        self.program_index = -1
-        ################
-
         ################ Stance variables
         self.stance = 0
         self.stance_names = [
-            'Logical_State',        # 0
-            'Land',                 # 1
-            'Takeoff',              # 2
-            'Stance Disarm',        # 3
-            'hover_over_romba',     # 4
-            'Land_Over_Roomba',     # 5
-            'Left_Right_Slide',     # 6
-            'Return_Home'           # 7
+            'Logical_State',        #  0
+            'Land',                 #  1
+            'Takeoff',              #  2
+            'Stance Disarm',        #  3
+            'hover_over_romba',     #  4
+            'Land_Over_Roomba',     #  5
+            'Left_Right_Slide',     #  6
+            'Return_Home',          #  7
+            'Enter_The_Arena',      #  8
+            'Forward',              #  9
+            'Backward',             # 10
+            'Left',                 # 11
+            'Right',                # 12
+            'Wait'                  # 13
         ]
 
         self.LOGICAL_STANCE    =    0
@@ -54,12 +40,59 @@ class Master():
         self.LAND_OVER_ROOMBA  =    5
         self.LEFT_RIGHT_SLIDE  =    6
         self.RETURN_HOME       =    7
+        self.ENTER_THE_ARENA   =    8
+        self.FORWARD           =    9
+        self.BACKWARD          =    10
+        self.LEFT              =    11
+        self.RIGHT             =    12
+        self.WAIT              =    13
         ################
+
+
+        ################# Instructions for flight
+        self.program = [
+            [ self.LOGICAL_STANCE ],
+            [ self.LOGICAL_STANCE ],
+            [ self.TAKOFF ],
+            #[ self.ENTER_THE_ARENA ],
+
+            #compleating the square
+            [ self.WAIT ],
+            [ self.LEFT ],
+            [ self.WAIT ],
+            [ self.BACKWARD ],
+            [ self.WAIT ],
+            [ self.RIGHT ],
+            [ self.WAIT ],
+            [ self.FORWARD ],
+            [ self.WAIT ],
+
+
+            #compleating the square
+            [ self.LEFT ],
+            [ self.BACKWARD ],
+            [ self.RIGHT ],
+            [ self.FORWARD ],
+
+
+            #compleating the square
+            [ self.LEFT ],
+            [ self.BACKWARD ],
+            [ self.RIGHT ],
+            [ self.FORWARD ],
+
+            #go back 1 m and return home
+            [ self.BACKWARD ],
+            [ self.LAND  ],
+            [ self.STANCE_DISARM ]
+        ]
+        self.program_index = -1
+        ################
+
 
         ################ subscriber threads
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
         rospy.Subscriber("mavros/px4flow/ground_distance",  Range,          self.flownar)
-       #rospy.Subscriber("mavros/altitude",                 Altitude,       self.altitude_callback)
         rospy.Subscriber("/mavros/state",                   State,          self.state_callback)
         rospy.Subscriber("/Vision/roomba/location_meters",  PoseArray,      self.roomba_location_callback)
         rospy.Subscriber("/mavros/battery",                 BatteryStatus,  self.battery_callback)
@@ -76,8 +109,8 @@ class Master():
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
 
-        self.PID_ON  = 1 # Position control
-        self.PID_OFF = 0 # Velocity control (still is pid'd right now)
+        self.PID_POSITIONAL  = 1 # Position control
+        self.PID_VELOCITY = 0 # Velocity control (still is pid'd right now)
 
 
         self.x_velocity_offset = 0
@@ -100,7 +133,7 @@ class Master():
 
         ################
         self.rate = rospy.Rate(10)
-        time.sleep(1)
+        time.sleep(2)
         self.preflight()
         self.main()
 
@@ -113,9 +146,9 @@ class Master():
 
             count += 1
 
-            self.x_bool = self.PID_OFF
-            self.y_bool = self.PID_OFF
-            self.z_bool = self.PID_OFF
+            self.x_bool = self.PID_VELOCITY
+            self.y_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_VELOCITY
 
             self.x_linear = 0
             self.y_linear = 0
@@ -146,7 +179,25 @@ class Master():
                 self.Left_Right_Slide(0.55)
 
             elif self.stance == self.RETURN_HOME:
-                self.Left_Right_Slide(0.55)
+                self.Return_Home(0.55)
+
+            elif self.stance == self.ENTER_THE_ARENA:
+                self.Enter_The_Arena(0.55)
+
+            elif self.stance == self.FORWARD:
+                self.Forward(0.55)
+
+            elif self.stance == self.BACKWARD:
+                self.Backward(0.55)
+
+            elif self.stance == self.LEFT:
+                self.Left(0.55)
+
+            elif self.stance == self.RIGHT:
+                self.Right(0.55)
+
+            elif self.stance == self.WAIT:
+                self.Wait(0.55)
 
 
             self.master_to_pid_vector.data[0] =   self.x_bool
@@ -180,12 +231,13 @@ class Master():
 
         self.program_index += 1
         self.countup = 0
+        self.countdown = 0
 
 
-        self.x_bool = self.PID_OFF
-        self.y_bool = self.PID_OFF
-        self.z_bool = self.PID_OFF
-        self.z_bool = self.PID_OFF
+        self.x_bool = self.PID_VELOCITY
+        self.y_bool = self.PID_VELOCITY
+        self.z_bool = self.PID_VELOCITY
+        self.z_bool = self.PID_VELOCITY
 
         self.x_linear = 0
         self.y_linear = 0
@@ -206,10 +258,11 @@ class Master():
 
         if self.altitude_current < 0.4 and self.countdown < 0:
             self.stance = self.LOGICAL_STANCE
+            self.disarm()
 
-        self.x_bool = self.PID_OFF
-        self.y_bool = self.PID_OFF
-        self.z_bool = self.PID_ON
+        self.x_bool = self.PID_VELOCITY
+        self.y_bool = self.PID_VELOCITY
+        self.z_bool = self.PID_POSITIONAL
 
         self.x_linear = 0
         self.y_linear = 0
@@ -219,9 +272,9 @@ class Master():
     ###################################
     def Takeoff(self, goal_altitude):
 
-        self.x_bool = self.PID_OFF
-        self.y_bool = self.PID_OFF
-        self.z_bool = self.PID_ON
+        self.x_bool = self.PID_VELOCITY
+        self.y_bool = self.PID_VELOCITY
+        self.z_bool = self.PID_POSITIONAL
 
         self.x_linear = 0
         self.y_linear = 0
@@ -235,9 +288,9 @@ class Master():
     ###################################
     def Stance_Disarm(self):
 
-        self.x_bool = self.PID_OFF
-        self.y_bool = self.PID_OFF
-        self.z_bool = self.PID_OFF
+        self.x_bool = self.PID_VELOCITY
+        self.y_bool = self.PID_VELOCITY
+        self.z_bool = self.PID_VELOCITY
 
         self.x_linear = 0
         self.y_linear = 0
@@ -248,33 +301,33 @@ class Master():
     ###################################
     def hover_over_roomba(self, goal_altitude):
         if len(self.roomba_list) > 0:
-            self.x_bool = self.PID_ON
-            self.y_bool = self.PID_ON
-            self.z_bool = self.PID_ON
-            #rospy.loginfo(str(self.roomba_list))
+            self.x_bool = self.PID_POSITIONAL
+            self.y_bool = self.PID_POSITIONAL
+            self.z_bool = self.PID_POSITIONAL
+
             self.x_linear = self.roomba_list[0][0]
             self.y_linear = self.roomba_list[0][1]
-            #rospy.loginfo(str(self.roomba_list))
             if self.roomba_list[0][2] < 0.1:
                 rospy.loginfo("I am over roomba, switching stane in : " + str(self.countdown))
                 self.countdown -= 0.1
-                if self.countdown < 0:
+                if self.countdown < 3:
                    rospy.loginfo("Currently over roomba")
                    self.stance = self.LOGICAL_STANCE
-
-                # This is for the endurence test
-                if self.battery_voltage < 13.5:
-                     self.stance = self.LOGICAL_STANCE
 
             else:
                 self.countdown = 2
         else:
-            self.x_bool = self.PID_OFF
-            self.y_bool = self.PID_OFF
-            self.z_bool = self.PID_ON
+            self.countdown += 1
+
+            self.x_bool = self.PID_VELOCITY
+            self.y_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
 
             self.x_linear = 0
             self.y_linear = 0
+
+            if self.countdown > 2:
+                self.stance = self.LAND
 
             rospy.loginfo("No Roomba In list")
 
@@ -285,9 +338,9 @@ class Master():
     ###################################
     def Land_Over_Roomba(self,hover_alt):
         if len(self.roomba_list) > 0:
-            self.x_bool = self.PID_ON
-            self.y_bool = self.PID_ON
-            self.z_bool = self.PID_OFF
+            self.x_bool = self.PID_POSITIONAL
+            self.y_bool = self.PID_POSITIONAL
+            self.z_bool = self.PID_VELOCITY
 
             self.x_linear = self.roomba_list[0][0]
             self.y_linear = self.roomba_list[0][1]
@@ -305,10 +358,9 @@ class Master():
 
             if self.countdown < 0:
                  self.stance = self.LOGICAL_STANCE
-                 self.program_index = 1
-            self.x_bool = self.PID_OFF
-            self.y_bool = self.PID_OFF
-            self.z_bool = self.PID_ON
+            self.x_bool = self.PID_VELOCITY
+            self.y_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
 
             self.x_linear = 0
             self.y_linear = 0
@@ -319,15 +371,15 @@ class Master():
 
             self.countdown  -= 0.1
 
-            if self.countdown < -2:
-                self.countdown = 2
+            if self.countdown < -5:
+                self.countdown = 5
 
-            self.x_bool = self.PID_OFF
-            self.y_bool = self.PID_OFF
-            self.z_bool = self.PID_ON
+            self.x_bool = self.PID_VELOCITY
+            self.y_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
 
-            self.y_linear = 0
-            self.x_linear = -0.1 * self.countdown / abs(self.countdown)
+            self.x_linear = 0
+            self.y_linear = 0.3 * self.countdown / abs(self.countdown)
             self.z_linear = self.maintain_altitude(altitude_goal)
 
             if len(self.roomba_list) > 0:
@@ -338,22 +390,122 @@ class Master():
     ###################################
     def Return_Home(self, altitude_goal):
 
-            self.y_bool = self.PID_ON
-            self.x_bool = self.PID_ON
-            self.z_bool = self.PID_ON
+            self.countdown  -= 0.1
 
-            self.x_linear = self.system_position[0]
-            self.y_linear = self.system_position[1]
-            self.z_linear = self.maintain_altitude(altitude_goal)
-
-            if check_within_bounds(self.system_position[0], 0.1, 0) and check_within_bounds(self.system_position[1], 0.1, 0) > 0:
+            if self.countdown < -2.5:
                 self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+
+            self.x_linear = -0.4
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+    ###################################
+    def Enter_The_Arena(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -3:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = 0.5
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+    ###################################
+    def Forward(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -2.5:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = 0.4
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+    ###################################
+    def Backward(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -2.5:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = -0.4
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+    ###################################
+    def Left(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -2.5:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = 0
+            self.y_linear = -0.4
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+
+    ###################################
+    def Right(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -2.5:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = 0.4
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
+    ###################################
+
+    ###################################
+    def Wait(self, altitude_goal):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -3:
+                self.stance = self.LOGICAL_STANCE
+
+            self.y_bool = self.PID_VELOCITY
+            self.x_bool = self.PID_VELOCITY
+            self.z_bool = self.PID_POSITIONAL
+            self.x_linear = 0
+            self.y_linear = 0
+            self.z_linear = self.maintain_altitude(altitude_goal)
     ###################################
 
     ###################################
     def Object_Avoidence(self, altitude_goal):
          pass
 
+    ###################################
 
     ##########################################################################################
     ################# various functions ######################################################
@@ -382,7 +534,7 @@ class Master():
         rospy.loginfo(str(raw_input("                                >>>")))
         rospy.loginfo("Saftey Glasses on?: ")
         rospy.loginfo(str(raw_input("                                >>>")))
-        rospy.loginfo("Are you ready to die? ")
+        rospy.loginfo("Final check")
         rospy.loginfo(str(raw_input("                                >>>")))
         return
 
@@ -392,10 +544,11 @@ class Master():
         if (((count+1) % 5) == 1 or not (self.stance_previous == self.stance or count < 10)) and self.state_current.guided:
             rospy.loginfo("--------------------------------------")
             rospy.loginfo("count:                " +    str(count))
-            rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
-            rospy.loginfo("Current altitude:     " +    str(self.altitude_current))
-            rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
-            rospy.loginfo("Current voltage:      " +    str(self.battery_voltage))
+            rospy.loginfo("stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
+            rospy.loginfo("altitude:     " +    str(self.altitude_current))
+            rospy.loginfo("ground speed: " +    str(self.velocity_current_magnitude))
+            rospy.loginfo("voltage:      " +    str(self.battery_voltage))
+            rospy.logwarn("Countdown:    " +    str(self.countdown))
 
 
             if self.battery_voltage < 14:
@@ -451,14 +604,6 @@ class Master():
     ##########################################################################################
     ################# Subscriber Call Backs ##################################################
     ##########################################################################################
-
-    ###################################
-    def altitude_callback(self, IncomingData):
-        if IncomingData.relative > 0.3 and IncomingData.relative < 20:
-            self.altitude_current = ( IncomingData.relative )
-        else:
-            self.altitude_current = ( IncomingData.amsl - IncomingData.terrain )
-    ###################################
 
     ###################################
     def flownar(self, IncomingData):

@@ -12,13 +12,14 @@ class Master:
     def __init__(self):
         print('init')
         ############# Create PID's for each linear dimension of the quadcopter
-        self.X_POSITION_PID = PID( 1.20, 0.8, 0,   1,  5)
-        self.Y_POSITION_PID = PID( 1.20, 0.8, 0,   1,  5)
-        self.Z_POSITION_PID = PID( 2.00, 0.50, 0,   0.6, 10)
+        # KP, KI, KD, maximum_magnitude, maximum_integral
+        self.X_POSITION_PID = PID( 1.20, 0.8, 0,   1.,  5)
+        self.Y_POSITION_PID = PID( 1.20, 0.8, 0,   1.,  5)
+        self.Z_POSITION_PID = PID( 2.00, 0.5, 0,   .6, 10)
 
-        self.X_VELOCITY_PID = PID( 1.0, 0.05, 0.1,   1, 10)
-        self.Y_VELOCITY_PID = PID( 1.0, 0.05, 0.1,   1, 10)
-        self.Z_VELOCITY_PID = PID( 2.0, 0.01, 0.1,   1, 10)
+        self.X_VELOCITY_PID = PID( 1.0, 0.1, 0.1, 1.0, 1)
+        self.Y_VELOCITY_PID = PID( 1.0, 0.1, 0.1, 1.0, 1)
+        self.Z_VELOCITY_PID = PID( 2.0, 0.01, 0.1, 1.0, 10)
 
         rospy.Subscriber("/Master/control/error", Float64MultiArray, self.pid_subscriber_callback)
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
@@ -26,7 +27,7 @@ class Master:
 
         self.velocity_publisher = rospy.Publisher('mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
 
-        #guessing at position,this is expiremental
+        #guessing at position, this is not yet working
         self.position_publisher= rospy.Publisher('PID_Node/position_guess', Float64MultiArray, queue_size=10)
         self.position_guess = Float64MultiArray()
         self.position_guess.data.append(0)
@@ -115,7 +116,7 @@ class Master:
     ###################################
     def local_position_velocity_callback(self,velocity_current):
         #velocity_current.twist.linear.x, velocity_current.twist.linear.y = self.main_to_act_refrence_frame(velocity_current.twist.linear.x, velocity_current.twist.linear.y)
-        self.velocity_current = velocity_current
+	self.velocity_current = velocity_current
     ###################################
 
     ###################################

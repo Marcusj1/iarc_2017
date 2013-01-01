@@ -143,13 +143,13 @@ class CircleDetect():
 
                         if (100*np.pi/180)> theta > (80*np.pi/180) or (100*np.pi/180)> (theta-np.pi) > (80*np.pi/180):     # horiziontal lines. 80 - 9cx ds0 deg; 260 - 280 deg
                             self.Hllist.data.append((y1+y2)/2) #add the average y point to the list, so that it's in the middle of the image
-                            cv2.line(output,pt1,pt2,(0,0,255),2)   #paint the image
+                            #cv2.line(output,pt1,pt2,(0,0,255),2)   #paint the image
                             #print "line in v arrary \n"
                             self.HAngAverage.data += theta*180/np.pi # adds the angle to the angle average
 
                         elif theta < (10*np.pi/180) or theta > (170*np.pi/180):    #pycharms doesent recognise rospy vertical lines. 10 - 0 deg; 190 - 200 deg
                             self.Vllist.data.append((x1+x2)/2) #add the average x point to the list, so that it's in the middle of the image
-                            cv2.line(output,pt1,pt2,(0,255,0),2)   #paint the image
+                            #cv2.line(output,pt1,pt2,(0,255,0),2)   #paint the image
                             #print "line is in h arrary \n"
 
             ##############################################################
@@ -171,7 +171,7 @@ class CircleDetect():
             #########################
 
             #for visulization:
-            cv2.imshow("output", np.hstack([img, output]))
+            #cv2.imshow("output", np.hstack([img, output]))
 
             #exit condition to leave the loop
             k = cv2.waitKey(30) & 0xff

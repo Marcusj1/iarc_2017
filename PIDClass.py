@@ -6,7 +6,7 @@ class PID:
         self.KI = KI
         self.KD = KD
         self.maximum_magnitude = maximum_magnitude
-        print (maximum_magnitude)
+        print(maximum_magnitude)
         print(maximum_integral)
         print("-----------")
         self.maximum_integral  = maximum_integral
@@ -14,7 +14,7 @@ class PID:
         self.integral = 0
         self.old_time = time.time()
         self.goal = 987
-
+	self.pervious_error = 0
 
     def run(self, goal, current):
         dt = time.time() - self.old_time
@@ -26,7 +26,8 @@ class PID:
 
         self.integral = self.magnitude_limits( self.integral, self.maximum_integral)
 
-        if dt > 1:
+
+        if dt > 1 and abs(self.pervious_error - error) > 0.1:
             self.integral = 0
 
         # Sets the derivative
@@ -40,10 +41,9 @@ class PID:
         print("                                    " + str(error*self.KP) + '  |  ' + str(self.integral*self.KI) + '  |  ' + str(derivative*self.KD))
         output = ( self.KP * error ) + ( self.KI * self.integral ) + ( self.KD * derivative )
         output = self.magnitude_limits(output, self.maximum_magnitude)
-        
+
         # Sets the previous error
         self.previous_error = error
-
         return output
 
     def magnitude_limits(self, output, maximum_magnitude):
