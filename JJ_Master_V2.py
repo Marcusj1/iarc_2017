@@ -61,7 +61,7 @@ class Master():
         rospy.Subscriber("mavros/px4flow/ground_distance",  Range,          self.flownar)
        #rospy.Subscriber("mavros/altitude",                 Altitude,       self.altitude_callback)
         rospy.Subscriber("/mavros/state",                   State,          self.state_callback)
-        rospy.Subscriber("/Vision/roomba_location_meters",         PoseArray,      self.roomba_location_callback)
+        rospy.Subscriber("/Vision/roomba/location_meters",  PoseArray,      self.roomba_location_callback)
         rospy.Subscriber("/mavros/battery",                 BatteryStatus,  self.battery_callback)
         ################
 
@@ -95,7 +95,7 @@ class Master():
         self.system_position = [0, 0]
         self.old_time = int(time.time())
         ################
-        self.mission_time_publisher = rospy.Publisher('master/mission_time', Float32, queue_size=10)
+        self.mission_time_publisher = rospy.Publisher('Master/mission_time', Float32, queue_size=10)
         self.mission_time = Float32()
 
         ################

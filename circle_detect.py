@@ -17,7 +17,7 @@ class CircleDetect():
 
     def __init__(self):
         # Create a publisher for acceleration data
-        self.pub = rospy.Publisher('/roomba/location_meters', PoseArray, queue_size=10)
+        self.pub = rospy.Publisher('/Vision/roomba/location_meters', PoseArray, queue_size=10)
         self.rate = rospy.Rate(10)  # needs to be runing fairly fast
         # For finding radius
         self.a = 391.3
@@ -138,7 +138,7 @@ class CircleDetect():
 
 if __name__ == '__main__':
     # Initiate the node
-    rospy.init_node('roomba', anonymous=True)
+    rospy.init_node('Vision')#, anonymous=True)
     try:
         circle = CircleDetect()
     except rospy.ROSInterruptException:
