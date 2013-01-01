@@ -50,7 +50,7 @@ class llist_Finder:
         self.HAngAverage = Float64()#######//
 
         gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY) # converts self.img to a greyscale image. 1st argument is what file to convert.
-    	gauss= cv2.GaussianBlur(gray, (9, 9), 0) # Gaussian Blur, no idea what argumets are, copied from Ian's circle detect
+        gauss= cv2.GaussianBlur(gray, (9, 9), 0) # Gaussian Blur, no idea what argumets are, copied from Ian's circle detect
         edges = cv2.Canny(gauss, 50, 130, apertureSize=3) #performs canny edge detection on self.img.
         # arguments: (image file to perform, minVal [below this are surely not edges], maxVal [above this are sure to be edges],
         # aperture size [default 3],L2gradient[default is true, decides which equn to use for finding the graident])
@@ -135,7 +135,7 @@ class llist_Finder:
 
         for i in self.Hllist.data:
             cv2.line(exp,(0,i),(ymax,i),(0,255,0),2)
-    
+
         for i in self.Vllist.data:
             cv2.line(exp,(i,0),(i,xmax),(0,0,255),2)
 

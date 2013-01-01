@@ -119,7 +119,7 @@ class CircleDetect():
         cv2.destroyAllWindows()
         self.cap.release()
 
-    ###################################
+    ################################### FLOWNAR callback took this place
     def altitude_callback(self, IncomingData):
         IncomingData = [0,0,0,0,0]
         IncomingData[0] = data.monotonic
@@ -130,7 +130,6 @@ class CircleDetect():
 
         if IncomingData[2] > 0.3 and IncomingData[2] < 20:
             self.alt = ( IncomingData[2] )
-
         else:
             self.alt = ( IncomingData[1] - IncomingData[3] )
 

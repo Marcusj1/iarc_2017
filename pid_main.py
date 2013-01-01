@@ -23,7 +23,7 @@ class PIDMain():
         self.old_time = rospy.get_time()
 
         # Create object of PID Controller with tunning arguments
-        self.pid_methods = pid_controller.PIDController(KP=0.5, KI=0.0, KD=0.0)  # PID contants P, I, D
+        self.pid_methods = pid_controller.PIDController(KP=1, KI=0.0, KD=0.5)  # PID contants P, I, D
 
         # runs the loop function
         self.loop_roomba_location()  # Runs roomba subscriber
@@ -70,7 +70,7 @@ class PIDMain():
         # set linear to value
         self.vel_twist.twist.linear.x = x_vel
         self.vel_twist.twist.linear.y = y_vel
-        self.vel_twist.twist.linear.z = z_vel
+        self.vel_twist.twist.linear.z = z_vel * 6
 
         # Set angular to zero
         self.vel_twist.twist.angular.x = 0
@@ -78,6 +78,7 @@ class PIDMain():
         self.vel_twist.twist.angular.z = 0
 
         # logs the xyz accel data
+        rospy.loginfo('--------------------------------')
         rospy.loginfo("incoming data: " + str(IncomingData))
         rospy.loginfo("outgoing data: " + str(x_vel) + ", " + str(y_vel) + ", "+ str(z_vel))
 
