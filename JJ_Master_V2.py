@@ -5,7 +5,6 @@ from std_msgs.msg import *
 from mavros_msgs.srv import *
 from mavros_msgs.msg import *
 import time
-import PID
 
 #Author: JJ Marcus
 #Last Edit Date: 28/11/2016
@@ -17,9 +16,11 @@ class Master():
 
         ################# Program variables
         self.program = [
-            [ 4 ]
+            [ 2 , 2 ],
+            [ 4 , 2 ],
+            [ 1 ]
         ]
-        self.program_index = -1
+        self.program_index = 0
         ################
 
         ################ Stance variables
@@ -30,6 +31,7 @@ class Master():
             'Takeoff',              # 2
             'calibrate_fcu',        # 3
             'hover_over_romba'      # 4
+            'Land_Over_Roomba'      # 5
 
         ]
 
@@ -38,6 +40,7 @@ class Master():
         self.TAKOFF =               2
         self.CALIBRATE_FCU =        3
         self.HOVER_OVER_ROOMBA =    4
+        self.LAND_OVER_ROOMBA =     5
         ################
 
         ################ subscriber threads
@@ -57,7 +60,6 @@ class Master():
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
 
-
         self.PID_ON =  1
         self.PID_OFF = 0
 
@@ -71,6 +73,7 @@ class Master():
 
         ################
         self.roomba_list = []
+        self.time_start = time.time
         ################
 
         time.sleep(1)
@@ -94,22 +97,23 @@ class Master():
             self.y_linear = 0
             self.z_linear = 0
 
-            self.stance = self.HOVER_OVER_ROOMBA
-
             if self.stance == self.LOGICAL_STANCE:
-                self.Logical_State()
+                self.Logical_Stance()
 
             elif self.stance == self.LAND:
                 self.Land()
 
             elif self.stance == self.TAKOFF:
-                self.Takeoff(self.program[self.program_index][2])
+                self.Takeoff(self.program[self.program_index][1])
 
             elif self.stance == self.CALIBRATE_FCU:
                 self.calibrate_fcu()
 
             elif self.stance == self.HOVER_OVER_ROOMBA:
-                self.hover_over_roomba()
+                self.hover_over_roomba(self.program[self.program_index][1])
+
+            elif self.stance == self.LAND_OVER_ROOMBA:
+                self.Land_Over_Roomba()
 
             self.master_to_pid_vector.data[0] = self.x_bool
             self.master_to_pid_vector.data[1] = self.y_bool
@@ -137,13 +141,14 @@ class Master():
     ##########################################################################################
 
     ###################################
-    def Logical_State(self):
-        self.program_index += 1
+    def Logical_Stance(self):
 
         if self.program_index > len(self.program):
             self.stance = self.LAND
         else:
             self.stance = self.program[self.program_index][0]
+
+        self.program_index += 1
 
 
         self.x_bool = self.PID_OFF
@@ -180,7 +185,7 @@ class Master():
     ###################################
 
     ###################################
-    def takeoff(self, goal_altitude):
+    def Takeoff(self, goal_altitude):
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_ON
@@ -231,7 +236,7 @@ class Master():
     ###################################
 
     ###################################
-    def hover_over_roomba(self):
+    def hover_over_roomba(self, goal_altitude):
         if len(self.roomba_list) > 0:
             self.x_bool = self.PID_ON
             self.y_bool = self.PID_ON
@@ -239,6 +244,14 @@ class Master():
 
             self.x_linear = self.roomba_list[0][0]
             self.z_linear = self.roomba_list[0][1]
+
+            if self.roomba_list[0][3] < 0.1:
+                rospy.loginfo("I am over roomba, switching stane in : " + str(self.countdown))
+                self.countdown -= 0.1
+                if self.countdown < 0:
+                    self.stance = 0
+            else:
+                self.countdown = 5
         else:
             self.x_bool = self.PID_OFF
             self.y_bool = self.PID_ON
@@ -247,10 +260,43 @@ class Master():
             self.x_linear = 0
             self.z_linear = 0
 
-        goal_altitude = 2
-        self.altitude_current = 2
-
         self.y_linear = self.maintain_altitude(goal_altitude)
+    ###################################
+
+    ###################################
+    def Land_Over_Roomba(self):
+        if len(self.roomba_list) > 0:
+            self.x_bool = self.PID_ON
+            self.y_bool = self.PID_ON
+            self.z_bool = self.PID_ON
+
+            self.x_linear = self.roomba_list[0][0]
+            self.z_linear = self.roomba_list[0][1]
+
+            if self.roomba_list[0][3] < 0.1:
+                rospy.loginfo("I am over roomba, landing")
+            if self.altitude_current < 0.3:
+                rospy.loginfo("DISARM")
+                self.disarm()
+
+            self.y_linear = -0.1
+
+            self.countdown = 3
+        else:
+            print("Roomba Lost ...")
+            self.countdown -= 0.1
+
+            if self.countdown < 0:
+                self.program_index = 0
+
+            self.x_bool = self.PID_OFF
+            self.y_bool = self.PID_ON
+            self.z_bool = self.PID_OFF
+
+            self.x_linear = 0
+            self.z_linear = 0
+            self.y_linear = 0
+
     ###################################
 
     ##########################################################################################
@@ -269,6 +315,9 @@ class Master():
 
         if self.velocity_current_magnitude > 10:
             self.disarm()
+
+        if self.time_start + 2*60 < time.time:
+            self.stance = self.LAND
     ###################################
 
     ###################################
