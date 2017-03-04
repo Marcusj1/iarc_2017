@@ -352,7 +352,7 @@ class Master():
     ###################################
     def local_position_velocity_callback(self,velocity_current):
         self.velocity_current = velocity_current
-        self.velocity_current_magnitude = (velocity_current.linear.x^2 + velocity_current.linear.y^2)^0.5
+        self.velocity_current_magnitude = (velocity_current.twist.linear.x**2 + velocity_current.twist.linear.y**2)**0.5
     ###################################
 
     ###################################

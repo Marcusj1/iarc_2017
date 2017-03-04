@@ -37,7 +37,7 @@ class CircleDetect():
     def loop_search(self):
         while not rospy.is_shutdown():
             # Uncomment for actual flight to find altitude
-            #rospy.Subscriber("mavros/altitude",Altitude,self.altitude_callback)
+            rospy.Subscriber("mavros/altitude",Altitude,self.altitude_callback)
 
             # read frame from capture
             ret, img = self.cap.read()
