@@ -4,6 +4,7 @@ from geometry_msgs.msg import *
 from std_msgs.msg import *
 from mavros_msgs.srv import *
 from mavros_msgs.msg import *
+from sensor_msgs.msg import *
 import time
 
 #Author: JJ Marcus
@@ -16,8 +17,8 @@ class Master():
 
         ################# Program variables
         self.program = [
-            [ 2 , 2 ],
-            [ 4 , 2 ],
+            [ 2 , 1 ],
+            [ 4 , 1 ],
             [ 1 ]
         ]
         self.program_index = 0
@@ -35,19 +36,21 @@ class Master():
 
         ]
 
-        self.LOGICAL_STANCE =       0
-        self.LAND =                 1
-        self.TAKOFF =               2
-        self.CALIBRATE_FCU =        3
+        self.LOGICAL_STANCE    =    0
+        self.LAND              =    1
+        self.TAKOFF            =    2
+        self.CALIBRATE_FCU     =    3
         self.HOVER_OVER_ROOMBA =    4
-        self.LAND_OVER_ROOMBA =     5
+        self.LAND_OVER_ROOMBA  =    5
         ################
 
         ################ subscriber threads
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
-        rospy.Subscriber("mavros/altitude",                 Altitude,       self.altitude_callback)
+        rospy.Subscriber("mavros/px4flow/ground_distance",  Range,          self.flownar)
+       #rospy.Subscriber("mavros/altitude",                 Altitude,       self.altitude_callback)
         rospy.Subscriber("/mavros/state",                   State,          self.state_callback)
         rospy.Subscriber("/roomba/location_meters",         PoseArray,      self.roomba_location_callback)
+        rospy.Subscriber("/mavros/battery",                 BatteryStatus,  self.battery_callback)
         ################
 
         ################ publisher objects and variables
@@ -60,7 +63,7 @@ class Master():
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
 
-        self.PID_ON =  1
+        self.PID_ON  = 1
         self.PID_OFF = 0
 
         self.x_velocity_offset = 0
@@ -74,8 +77,9 @@ class Master():
         ################
         self.roomba_list = []
         self.time_start = time.time
+        self.countdown = 5
         ################
-
+        self.rate = rospy.Rate(10)
         time.sleep(1)
         self.main()
 
@@ -87,7 +91,7 @@ class Master():
         while not rospy.is_shutdown():
 
             count += 1
-            #self.safty_checks(count)
+            self.safty_checks(count)
 
             self.x_bool = self.PID_OFF
             self.y_bool = self.PID_OFF
@@ -97,7 +101,7 @@ class Master():
             self.y_linear = 0
             self.z_linear = 0
 
-            if self.stance == self.LOGICAL_STANCE:
+            if self.stance   == self.LOGICAL_STANCE:
                 self.Logical_Stance()
 
             elif self.stance == self.LAND:
@@ -132,6 +136,8 @@ class Master():
 
             self.stance_previous = self.stance
 
+            self.rate.sleep()
+
             self.master_to_pid_publisher.publish(self.master_to_pid_vector)
 
     ###################################
@@ -142,14 +148,12 @@ class Master():
 
     ###################################
     def Logical_Stance(self):
+        self.program_index += 1
 
         if self.program_index > len(self.program):
             self.stance = self.LAND
         else:
             self.stance = self.program[self.program_index][0]
-
-        self.program_index += 1
-
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -164,15 +168,15 @@ class Master():
     def Land(self):
 
         if not self.stance_previous == self.LAND:
-            countdown = 5
+            self.countdown = 5
 
         if self.altitude_current < 0.10 or self.altitude_current < 0:
-            countdown -= 0.1
-            rospy.loginfo("WARNING: low altitude, DISARMING in: " + str(countdown))
+            self.countdown -= 0.1
+            rospy.loginfo("WARNING: low altitude, DISARMING in: " + str(self.countdown))
         else:
-            countdown = 10
+            self.countdown = 10
 
-        if ( self.altitude_current < 0.05 or self.altitude_current < 0 ) and countdown < 0:
+        if self.altitude_current < 0.32 and self.countdown < 0:
             self.disarm()
 
         self.x_bool = self.PID_OFF
@@ -194,6 +198,10 @@ class Master():
         self.x_linear = 0
         self.y_linear = self.maintain_altitude(goal_altitude)
         self.z_linear = 0
+
+        if self.altitude_current == self.goal_altitude:
+            self.stance = self.LOGICAL_STANCE
+
     ###################################
 
     ################################### THIS SHOULDNT BE NESSARY ANYMORE
@@ -207,10 +215,10 @@ class Master():
         self.flow_z += self.velocity_current.linear.z
 
 
-        print('current flow stat: (x,y,z)')
-        print(self.velocity_current.linear.x)
-        print(self.velocity_current.linear.y)
-        print(self.velocity_current.linear.z)
+        rospy.loginfo('current flow stat: (x,y,z)')
+        rospy.loginfo(self.velocity_current.linear.x)
+        rospy.loginfo(self.velocity_current.linear.y)
+        rospy.loginfo(self.velocity_current.linear.z)
 
 
         self.calibration_count += 1
@@ -219,12 +227,12 @@ class Master():
             self.x_velocity_offset = self.flow_x / 10
             self.y_velocity_offset = self.flow_y / 10
             self.z_velocity_offset = self.flow_z / 10
-            print('offsets:')
-            print (self.x_velocity_offset)
-            print (self.y_velocity_offset)
-            print (self.z_velocity_offset)
+            rospy.loginfo('offsets:')
+            rospy.loginfo (self.x_velocity_offset)
+            rospy.loginfo (self.y_velocity_offset)
+            rospy.loginfo (self.z_velocity_offset)
             time.sleep(10)
-            self.stance = 0
+            self.stance = self.LOGICAL_STANCE
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -245,11 +253,11 @@ class Master():
             self.x_linear = self.roomba_list[0][0]
             self.z_linear = self.roomba_list[0][1]
 
-            if self.roomba_list[0][3] < 0.1:
+            if self.roomba_list[0][2] < 0.1:
                 rospy.loginfo("I am over roomba, switching stane in : " + str(self.countdown))
                 self.countdown -= 0.1
                 if self.countdown < 0:
-                    self.stance = 0
+                    self.stance = self.LOGICAL_STANCE
             else:
                 self.countdown = 5
         else:
@@ -275,7 +283,7 @@ class Master():
 
             if self.roomba_list[0][3] < 0.1:
                 rospy.loginfo("I am over roomba, landing")
-            if self.altitude_current < 0.3:
+            if self.altitude_current < 0.32:
                 rospy.loginfo("DISARM")
                 self.disarm()
 
@@ -283,7 +291,7 @@ class Master():
 
             self.countdown = 3
         else:
-            print("Roomba Lost ...")
+            rospy.loginfo("Roomba Lost ...")
             self.countdown -= 0.1
 
             if self.countdown < 0:
@@ -304,20 +312,27 @@ class Master():
     ##########################################################################################
 
     ###################################
-    def safty_check(self, count):
+    def safty_checks(self, count):
         if not self.state_current.guided:
-            self.stance = 0
+            self.stance = self.LOGICAL_STANCE
+            self.program_index = 0
 
-        if (count % 20) == 1 or not self.stance_previous == self.stance:
-            rospy.loginfo("Current stance: " +          str(self.stance_names[self.stance]))
-            rospy.loginfo("Current altitude: " +        str(self.altitude_current))
+        if (count % 20) == 1 or not (self.stance_previous == self.stance and not self.state_current.guided):
+            rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]))
+            rospy.loginfo("Current altitude:     " +    str(self.altitude_current))
             rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
+            rospy.loginfo("Current voltage:      " +    str(self.battery_voltage))
+
+        if self.battery_voltage < 12:
+            rospy.warn("WARNING BATTERY VOLTAGE LOW")
+
+        if self.battery_voltage < 10:
+            rospy.fatal("BATTERY VOLTAGE TOO LOW: DISARMING")
+            self.disarm()
 
         if self.velocity_current_magnitude > 10:
             self.disarm()
 
-        if self.time_start + 2*60 < time.time:
-            self.stance = self.LAND
     ###################################
 
     ###################################
@@ -350,6 +365,13 @@ class Master():
     ###################################
 
     ###################################
+    def flownar(self, IncomingData):
+
+        if not IncomingData.range == 0:
+            self.altitude_current = IncomingData.range
+    ###################################
+
+    ###################################
     def local_position_velocity_callback(self,velocity_current):
         self.velocity_current = velocity_current
         self.velocity_current_magnitude = (velocity_current.twist.linear.x**2 + velocity_current.twist.linear.y**2)**0.5
@@ -369,6 +391,11 @@ class Master():
         for pose in roomba_location_pose_arrary.poses:
             distance = (pose.position.x**2 + pose.position.y**2)**0.5
             self.roomba_list.append([pose.position.x, pose.position.y, distance])
+    ###################################
+
+    ###################################
+    def battery_callback(self, incoming_data):
+        self.battery_voltage = incoming_data.voltage
     ###################################
 
 ##########################################################################################
