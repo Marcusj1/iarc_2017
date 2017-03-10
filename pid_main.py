@@ -32,7 +32,7 @@ class PIDMain():
         # while the node is still running loop
 
         # create and subscribe to the message /roomba/location
-        self.subscriber = rospy.Subscriber("/master/control/error", Float64MultiArray, self.callback)
+        self.subscriber = rospy.Subscriber("/Master/control/error", Float64MultiArray, self.callback)
 
         while not rospy.is_shutdown():
             # publish the accel vector to mavros

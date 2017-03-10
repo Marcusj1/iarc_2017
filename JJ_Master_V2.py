@@ -17,11 +17,12 @@ class Master():
 
         ################# Program variables
         self.program = [
+            [ 0 ],
             [ 2 , 1 ],
             [ 4 , 1 ],
             [ 1 ]
         ]
-        self.program_index = 0
+        self.program_index = -1
         ################
 
         ################ Stance variables
@@ -31,7 +32,7 @@ class Master():
             'Land',                 # 1
             'Takeoff',              # 2
             'calibrate_fcu',        # 3
-            'hover_over_romba'      # 4
+            'hover_over_romba',     # 4
             'Land_Over_Roomba'      # 5
 
         ]
@@ -54,7 +55,7 @@ class Master():
         ################
 
         ################ publisher objects and variables
-        self.master_to_pid_publisher = rospy.Publisher("/master/control/error", Float64MultiArray, queue_size=10)
+        self.master_to_pid_publisher = rospy.Publisher("/Master/control/error", Float64MultiArray, queue_size=10)
         self.master_to_pid_vector = Float64MultiArray()
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
@@ -91,6 +92,8 @@ class Master():
         while not rospy.is_shutdown():
 
             count += 1
+
+            self.stance_previous = self.stance
             self.safty_checks(count)
 
             self.x_bool = self.PID_OFF
@@ -134,8 +137,6 @@ class Master():
             self.master_to_pid_vector.data[4] = self.y_linear
             self.master_to_pid_vector.data[5] = self.z_linear
 
-            self.stance_previous = self.stance
-
             self.rate.sleep()
 
             self.master_to_pid_publisher.publish(self.master_to_pid_vector)
@@ -148,12 +149,13 @@ class Master():
 
     ###################################
     def Logical_Stance(self):
-        self.program_index += 1
 
-        if self.program_index > len(self.program):
+        if self.program_index > len(self.program) or self.program_index < 0:
             self.stance = self.LAND
         else:
             self.stance = self.program[self.program_index][0]
+
+        self.program_index += 1
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -199,7 +201,7 @@ class Master():
         self.y_linear = self.maintain_altitude(goal_altitude)
         self.z_linear = 0
 
-        if self.altitude_current == self.goal_altitude:
+        if self.altitude_current == goal_altitude:
             self.stance = self.LOGICAL_STANCE
 
     ###################################
@@ -313,38 +315,40 @@ class Master():
 
     ###################################
     def safty_checks(self, count):
-        if not self.state_current.guided:
-            self.stance = self.LOGICAL_STANCE
-            self.program_index = 0
 
-        if (count % 20) == 1 or not (self.stance_previous == self.stance and not self.state_current.guided):
-            rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]))
+        if ((count+1) % 10) == 1 or not (self.stance_previous == self.stance) or count < 10:
+            rospy.loginfo("--------------------------------------")
+            rospy.loginfo("count:                " +    str(count))
+            rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
             rospy.loginfo("Current altitude:     " +    str(self.altitude_current))
             rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
             rospy.loginfo("Current voltage:      " +    str(self.battery_voltage))
 
-        if self.battery_voltage < 12:
-            rospy.warn("WARNING BATTERY VOLTAGE LOW")
+            if not self.state_current.guided:
+                self.stance = self.LOGICAL_STANCE
+                self.program_index = 0
+                rospy.logwarn("Manual mode, returning to logical. Program will not run.")
+
+            if self.battery_voltage < 12:
+                rospy.logwarn("WARNING BATTERY VOLTAGE LOW")
 
         if self.battery_voltage < 10:
-            rospy.fatal("BATTERY VOLTAGE TOO LOW: DISARMING")
+            rospy.logfatal("BATTERY VOLTAGE TOO LOW: DISARMING")
             self.disarm()
 
         if self.velocity_current_magnitude > 10:
+            rospy.logfatal("TOO HIGH VELOCITY DETECTED: DISARMING")
             self.disarm()
-
     ###################################
 
     ###################################
     def maintain_altitude(self, altitude_goal):
-        return self.altitude_current - altitude_goal
+        return altitude_goal -self.altitude_current
     ###################################
 
     ###################################
     def disarm(self):
         while True:
-            rospy.loginfo("DISARM-DISARM-DISARM")
-            rospy.logwarn("DISARM-DISARM-DISARM")
             rospy.logfatal("DISARM-DISARM-DISARM")
             self.state_variable.armed = False
             self.state_variable.guided = False

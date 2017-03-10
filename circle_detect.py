@@ -146,7 +146,7 @@ class CircleDetect():
 
 if __name__ == '__main__':
     # Initiate the node
-    rospy.init_node('Circle_Detect', anonymous=True)
+    rospy.init_node('roomba', anonymous=True)
     try:
         circle = CircleDetect()
     except rospy.ROSInterruptException:
