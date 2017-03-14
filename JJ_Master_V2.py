@@ -18,8 +18,9 @@ class Master():
         ################# Program variables
         self.program = [
             [ 0 ],
-            [ 2 , 1 ],
-            [ 4 , 1 ],
+            [ 2 , 0.6 ],
+            [ 6 ],
+            [ 4 , 0.6 ],
             [ 1 ]
         ]
         self.program_index = -1
@@ -33,8 +34,8 @@ class Master():
             'Takeoff',              # 2
             'calibrate_fcu',        # 3
             'hover_over_romba',     # 4
-            'Land_Over_Roomba'      # 5
-
+            'Land_Over_Roomba',     # 5
+            'Left_Right_Slide'      # 6
         ]
 
         self.LOGICAL_STANCE    =    0
@@ -43,6 +44,7 @@ class Master():
         self.CALIBRATE_FCU     =    3
         self.HOVER_OVER_ROOMBA =    4
         self.LAND_OVER_ROOMBA  =    5
+        self.LEFT_RIGHT_SLIDE  =    6
         ################
 
         ################ subscriber threads
@@ -111,6 +113,7 @@ class Master():
                 self.Land()
 
             elif self.stance == self.TAKOFF:
+                print(self.program[self.program_index])
                 self.Takeoff(self.program[self.program_index][1])
 
             elif self.stance == self.CALIBRATE_FCU:
@@ -121,6 +124,8 @@ class Master():
 
             elif self.stance == self.LAND_OVER_ROOMBA:
                 self.Land_Over_Roomba()
+            elif self.stance == self.LEFT_RIGHT_SLIDE:
+                self.Left_Right_Slide(count)
 
             self.master_to_pid_vector.data[0] = self.x_bool
             self.master_to_pid_vector.data[1] = self.y_bool
@@ -201,7 +206,7 @@ class Master():
         self.y_linear = self.maintain_altitude(goal_altitude)
         self.z_linear = 0
 
-        if self.altitude_current == goal_altitude:
+        if self.altitude_current > goal_altitude-0.1 and self.altitude_current < goal_altitude+0.1:
             self.stance = self.LOGICAL_STANCE
 
     ###################################
@@ -308,6 +313,27 @@ class Master():
             self.y_linear = 0
 
     ###################################
+    def Left_Right_Slide(self, count):
+
+            self.countdown  -= 0.1
+
+            if self.countdown < -1.5:
+                self.countdown = 1.5
+
+
+            self.x_bool = self.PID_OFF
+            self.y_bool = self.PID_ON
+            self.z_bool = self.PID_OFF
+
+            self.x_linear = 0.3 * self.countdown / abs(self.countdown)
+            self.z_linear = 0.0
+            self.y_linear = 0.0
+
+            if len(self.roomba_list) > 0:
+                self.stance = self.LOGICAL_STANCE
+
+    ###################################
+
 
     ##########################################################################################
     ################# various functions ######################################################
@@ -324,21 +350,28 @@ class Master():
             rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
             rospy.loginfo("Current voltage:      " +    str(self.battery_voltage))
 
-            if not self.state_current.guided:
-                self.stance = self.LOGICAL_STANCE
-                self.program_index = 0
-                rospy.logwarn("Manual mode, returning to logical. Program will not run.")
-
             if self.battery_voltage < 12:
                 rospy.logwarn("WARNING BATTERY VOLTAGE LOW")
+
+            if self.altitude_current > 3:
+                rospy.logwarn("WARNING ALTITUDE TOO HIGH")
 
         if self.battery_voltage < 10:
             rospy.logfatal("BATTERY VOLTAGE TOO LOW: DISARMING")
             self.disarm()
 
-        if self.velocity_current_magnitude > 10:
+        if self.velocity_current_magnitude > 100:
             rospy.logfatal("TOO HIGH VELOCITY DETECTED: DISARMING")
             self.disarm()
+
+        if self.altitude_current > 3.5 :
+            rospy.logfatal("ALTITUDE TOO HIGH: DISARMING")
+            self.disarm()
+
+        if not self.state_current.guided:
+            self.stance = self.LOGICAL_STANCE
+            self.program_index = 0
+            rospy.logwarn("Manual mode, returning to logical. Program will not run.")
     ###################################
 
     ###################################
@@ -353,6 +386,7 @@ class Master():
             self.state_variable.armed = False
             self.state_variable.guided = False
             self.state_publisher.publish(self.state_variable)
+            quit()
     ###################################
 
     ##########################################################################################

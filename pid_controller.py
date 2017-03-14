@@ -38,7 +38,7 @@ class PIDController:
         # Sets the Y derivative
         derivative_y = (error_y - self.previous_error_y)/dt
         # Adjusts the Y output by the constants KP, KI, and KD
-        self.output_y = self.KP*error_y + self.KI*self.integral_y + self.KD*derivative_y
+        self.output_y = self.KP*error_y*2.0 + self.KI*self.integral_y + self.KD*derivative_y
         # Sets the previous error for Y
         self.previous_error_y = error_y
 
