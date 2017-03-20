@@ -65,8 +65,9 @@ class Master():
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
 
-        self.PID_ON  = 1
-        self.PID_OFF = 0
+        self.PID_ON  = 1 # Position control
+        self.PID_OFF = 0 # Velocity control (still is pid'd right now)
+
 
         self.x_velocity_offset = 0
         self.y_velocity_offset = 0
@@ -325,8 +326,8 @@ class Master():
             self.x_bool = self.PID_OFF
             self.z_bool = self.PID_ON
 
-            self.y_linear = -self.velocity_current.twist.linear.y * 1.4
-            self.x_linear = -self.velocity_current.twist.linear.x * 1.4
+            self.y_linear = 0
+            self.x_linear = 0
             self.z_linear = self.maintain_altitude(0.75)
 
             if len(self.roomba_list) > 0:
@@ -430,7 +431,7 @@ class Master():
 
     ###################################
     def roomba_location_callback(self, roomba_location_pose_arrary):
-        previous_roomba_list = self.roomba_list
+        previous_roomba_list = self.roomba_listp
         self.roomba_list = []
         #the point message is dist in meteres
         #the orientation message is dist in pixles
