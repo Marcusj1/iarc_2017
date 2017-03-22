@@ -1,6 +1,6 @@
 import time
 class PID:
-    def __init__(self, KP, KI, KD, maximum_magnitude, maximum_integral):
+    def __init__(self, KP, KI, KD, maximum_magnitude = 3, maximum_integral = 2):
         self.KP = KP
         self.KI = KI
         self.KD = KD

@@ -11,13 +11,13 @@ class Master():
     def __init__(self):
         print('init')
         ############# Create PID's for each linear dimension of the quadcopter
-        self.X_POSITION_PID = PID( 0.3, 0, 0, 1/4)
-        self.Y_POSITION_PID = PID( 0.3, 0, 0, 1/4)
-        self.Z_POSITION_PID = PID( 0.3, 0, 0, 1/3)
+        self.X_POSITION_PID = PID( 0.3, 0.1, 0, 1/4, 5)
+        self.Y_POSITION_PID = PID( 0.3, 0.1, 0, 1/4, 5)
+        self.Z_POSITION_PID = PID( 0.3, 0.1, 0, 1/3, 5)
 
-        self.X_VELOCITY_PID = PID( 1, 0, 0.1, 4)
-        self.Y_VELOCITY_PID = PID( 1, 0, 0.1, 4)
-        self.Z_VELOCITY_PID = PID( 1, 0, 0.1, 4)
+        self.X_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
+        self.Y_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
+        self.Z_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
 
         rospy.Subscriber("/Master/control/error", Float64MultiArray, self.pid_subscriber_callback)
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
@@ -33,7 +33,7 @@ class Master():
         self.main()
 
     def main(self):
-        while True:
+        while not rospy.is_shutdown():
             dt = rospy.get_time() - self.old_time
             self.oldtime = rospy.get_time()
 
@@ -52,7 +52,9 @@ class Master():
             else:
                 z_vel = self.Z_POSITION_PID(self.IncomingData[5], 0)
 
-
+            x_ang = 0
+            y_ang = 0
+            z_ang = 0
 
             ##########################################################################################
             ################# velocity publisher #####################################################
@@ -81,16 +83,13 @@ class Master():
 ################# Subscriber Call Backs ##################################################
 ##########################################################################################
 
+    ##################################
     def pid_subscriber_callback(self, IncomingData):
         self.count += 1
-
         self.IncomingData = IncomingData.data()
+    ##################################
 
-##########################################################################################
-################# Subscriber Call Backs ##################################################
-##########################################################################################
-
-    ###################################
+   ###################################
     def local_position_velocity_callback(self,velocity_current):
         self.velocity_current = velocity_current
     ###################################
