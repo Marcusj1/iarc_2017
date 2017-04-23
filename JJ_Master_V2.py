@@ -18,9 +18,14 @@ class Master():
         ################# Program variables
         self.program = [
             [ 0 ],
-            [ 6 ],
+            [ 0 ],
             [ 2 ],
-            [ 1 ]
+            [ 6 ],
+            [ 4 ],
+            [ 5 ],
+            [ 2 ],
+            [ 1 ],
+            [ 3 ],
         ]
         self.program_index = -1
         ################
@@ -31,19 +36,21 @@ class Master():
             'Logical_State',        # 0
             'Land',                 # 1
             'Takeoff',              # 2
-            'calibrate_fcu',        # 3
+            'Stance Disarm',        # 3
             'hover_over_romba',     # 4
             'Land_Over_Roomba',     # 5
-            'Left_Right_Slide'      # 6
+            'Left_Right_Slide',     # 6
+            'Return_Home'           # 7
         ]
 
         self.LOGICAL_STANCE    =    0
         self.LAND              =    1
         self.TAKOFF            =    2
-        self.CALIBRATE_FCU     =    3
+        self.STANCE_DISARM     =    3
         self.HOVER_OVER_ROOMBA =    4
         self.LAND_OVER_ROOMBA  =    5
         self.LEFT_RIGHT_SLIDE  =    6
+        self.RETURN_HOME       =    7
         ################
 
         ################ subscriber threads
@@ -58,6 +65,7 @@ class Master():
         ################ publisher objects and variables
         self.master_to_pid_publisher = rospy.Publisher("/Master/control/error", Float64MultiArray, queue_size=10)
         self.master_to_pid_vector = Float64MultiArray()
+        self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
@@ -81,9 +89,12 @@ class Master():
         self.roomba_list = []
         self.time_start = time.time
         self.countdown = 5
+        self.system_position = [0, 0]
+        self.old_time = int(time.time())
         ################
         self.rate = rospy.Rate(10)
         time.sleep(1)
+        self.preflight()
         self.main()
 
 
@@ -113,34 +124,31 @@ class Master():
                 self.Land()
 
             elif self.stance == self.TAKOFF:
-                self.Takeoff(1.15)
+                self.Takeoff(0.55)
 
-            elif self.stance == self.CALIBRATE_FCU:
-                self.calibrate_fcu()
+            elif self.stance == self.STANCE_DISARM:
+                self.Stance_Disarm()
 
             elif self.stance == self.HOVER_OVER_ROOMBA:
-                self.hover_over_roomba(0.75)
+                self.hover_over_roomba(0.55)
 
             elif self.stance == self.LAND_OVER_ROOMBA:
                 self.Land_Over_Roomba()
 
             elif self.stance == self.LEFT_RIGHT_SLIDE:
-                self.Left_Right_Slide(count)
+                self.Left_Right_Slide(0.45)
 
-            self.master_to_pid_vector.data[0] = self.x_bool
-            self.master_to_pid_vector.data[1] = self.y_bool
-            self.master_to_pid_vector.data[2] = self.z_bool
-            '''
-            if self.x_bool == self.PID_OFF:
-                self.x_linear -= self.x_velocity_offset
-            if self.y_bool == self.PID_OFF:
-                self.y_linear -= self.y_velocity_offset
-            if self.z_bool == self.PID_OFF:
-                self.z_linear -= self.
-            ''' # unnessary if FCU does not have a stupid high offset, which it shouldn't ever.
-            self.master_to_pid_vector.data[3] = self.x_linear
-            self.master_to_pid_vector.data[4] = self.y_linear
-            self.master_to_pid_vector.data[5] =-self.z_linear
+            elif self.stance == self.RETURN_HOME:
+                self.Left_Right_Slide(0.45)
+
+
+            self.master_to_pid_vector.data[0] =   self.x_bool
+            self.master_to_pid_vector.data[1] =   self.y_bool
+            self.master_to_pid_vector.data[2] =   self.z_bool
+            self.master_to_pid_vector.data[3] =   self.x_linear
+            self.master_to_pid_vector.data[4] =   self.y_linear
+            self.master_to_pid_vector.data[5] = - self.z_linear
+            self.master_to_pid_vector.data[6] =   count
 
             self.rate.sleep()
 
@@ -161,6 +169,8 @@ class Master():
             self.stance = self.program[self.program_index][0]
 
         self.program_index += 1
+        self.countup = 0
+
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -175,16 +185,16 @@ class Master():
     def Land(self):
 
         if not self.stance_previous == self.LAND:
-            self.countdown = 2
+            self.countdown = 1
 
-        if self.altitude_current < 0.45:
+        if self.altitude_current < 0.5:
             self.countdown -= 0.1
-            rospy.loginfo("WARNING: low altitude, DISARMING in: " + str(self.countdown))
+            rospy.loginfo("low altitude, switching stance in: " + str(self.countdown))
         else:
             self.countdown = 1
 
         if self.altitude_current < 0.4 and self.countdown < 0:
-            self.disarm()
+            self.stance = self.LOGICAL_STANCE
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -192,7 +202,7 @@ class Master():
 
         self.x_linear = 0
         self.y_linear = 0
-        self.z_linear =  self.maintain_altitude(0.2)
+        self.z_linear =  self.maintain_altitude(0.01)
     ###################################
 
     ###################################
@@ -206,40 +216,13 @@ class Master():
         self.y_linear = 0
         self.z_linear = self.maintain_altitude(goal_altitude)
 
-        if self.altitude_current > goal_altitude-0.1 and self.altitude_current < goal_altitude+0.1:
+        if self.altitude_current > goal_altitude-0.05 and self.altitude_current < goal_altitude+0.05:
             self.stance = self.LOGICAL_STANCE
 
     ###################################
 
-    ################################### THIS SHOULDNT BE NESSARY ANYMORE
-    def calibrate_fcu(self):
-
-        self.calibration_count = 0
-        self.calibration_nessary = 10
-
-        self.flow_x += self.velocity_current.linear.x
-        self.flow_y += self.velocity_current.linear.y
-        self.flow_z += self.velocity_current.linear.z
-
-
-        rospy.loginfo('current flow stat: (x,y,z)')
-        rospy.loginfo(self.velocity_current.linear.x)
-        rospy.loginfo(self.velocity_current.linear.y)
-        rospy.loginfo(self.velocity_current.linear.z)
-
-
-        self.calibration_count += 1
-
-        if self.calibration_count >= self.calibration_nessary:
-            self.x_velocity_offset = self.flow_x / 10
-            self.y_velocity_offset = self.flow_y / 10
-            self.z_velocity_offset = self.flow_z / 10
-            rospy.loginfo('offsets:')
-            rospy.loginfo (self.x_velocity_offset)
-            rospy.loginfo (self.y_velocity_offset)
-            rospy.loginfo (self.z_velocity_offset)
-            time.sleep(10)
-            self.stance = self.LOGICAL_STANCE
+    ###################################
+    def Stance_Disarm(self):
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
@@ -247,7 +230,8 @@ class Master():
 
         self.x_linear = 0
         self.y_linear = 0
-        self.z_linear = 0
+        self.z_linear = -9000
+        self.disarm()
     ###################################
 
     ###################################
@@ -255,29 +239,35 @@ class Master():
         if len(self.roomba_list) > 0:
             self.x_bool = self.PID_ON
             self.y_bool = self.PID_ON
-            self.z_bool = self.PID_OFF
-
-            self.x_linear = -self.roomba_list[0][0]
+            self.z_bool = self.PID_ON
+            #rospy.loginfo(str(self.roomba_list))
+            self.x_linear = self.roomba_list[0][0]
             self.y_linear = -self.roomba_list[0][1]
-            self.z_linear = 0
-
-            if self.roomba_list[0][2] < 0.1:
+            #rospy.loginfo(str(self.roomba_list))
+            if self.roomba_list[0][2] < 0.2:
                 rospy.loginfo("I am over roomba, switching stane in : " + str(self.countdown))
                 self.countdown -= 0.1
                 if self.countdown < 0:
-                    self.stance = self.LOGICAL_STANCE
+                   rospy.loginfo("Currently over roomba")
+
+                # This is for the endurence test
+                if self.battery_voltage < 14.5:
+                     self.stance = self.LOGICAL_STANCE
+
             else:
-                self.countdown = 0.5
+                self.countdown = 2
         else:
             self.x_bool = self.PID_OFF
             self.y_bool = self.PID_OFF
-            self.z_bool = self.PID_OFF
+            self.z_bool = self.PID_ON
 
             self.x_linear = 0
             self.y_linear = 0
-            self.z_linear = 0
 
-        self.y_linear = self.maintain_altitude(goal_altitude)
+            rospy.loginfo("No Roomba In list")
+
+        self.z_linear = self.maintain_altitude(goal_altitude)
+        #rospy.loginfo(str(self.x_linear) + " ::: " + str(self.y_linear))
     ###################################
 
     ###################################
@@ -288,52 +278,74 @@ class Master():
             self.z_bool = self.PID_OFF
 
             self.x_linear = -self.roomba_list[0][0]
-            self.y_linear = -self.roomba_list[0][1]
+            self.y_linear = self.roomba_list[0][1]
 
-            if self.roomba_list[0][3] < 0.1:
+            if self.roomba_list[0][2] < 0.15:
                 rospy.loginfo("I am over roomba, landing")
             if self.altitude_current < 0.4:
-                rospy.loginfo("DISARM")
-                self.disarm()
+                rospy.loginfo("Switching to logical")
+                self.stance = self.LOGICAL_STANCE
 
-            self.z_linear = self.maintain_altitude(0.4)
-
-            self.countdown = 3
+            self.z_linear   = -0.2
+            self.countdown  =  3
         else:
             rospy.loginfo("Roomba Lost ...")
             self.countdown -= 0.1
 
             if self.countdown < 0:
-                self.program_index = 0
-
+                 self.stance = self.LOGICAL_STANCE
+                 self.program_index = 0
             self.x_bool = self.PID_OFF
-            self.z_bool = self.PID_OFF
             self.y_bool = self.PID_OFF
+            self.z_bool = self.PID_ON
 
             self.x_linear = 0
             self.y_linear = 0
-            self.z_linear = 0
+            self.z_linear = self.maintain_altitude(0.3)
 
     ###################################
-    def Left_Right_Slide(self, count):
+    def Left_Right_Slide(self, altitude_goal):
 
             self.countdown  -= 0.1
 
-            if self.countdown < -1.5:
-                self.countdown = 1.5
+            if self.countdown < -2:
+                self.countdown = 2
+
+            if len(self.roomba_list) > 0:
+                self.stance = self.LOGICAL_STANCE
+
 
             self.y_bool = self.PID_OFF
             self.x_bool = self.PID_OFF
             self.z_bool = self.PID_ON
 
             self.y_linear = 0
-            self.x_linear = 0
-            self.z_linear = self.maintain_altitude(0.75)
+            self.x_linear = -0.15 * self.countdown / abs(self.countdown)
+            self.z_linear = self.maintain_altitude(altitude_goal)
 
             if len(self.roomba_list) > 0:
                 self.stance = self.LOGICAL_STANCE
 
     ###################################
+
+    ###################################
+    def Return_Home(self, altitude_goal):
+
+            self.y_bool = self.PID_ON
+            self.x_bool = self.PID_ON
+            self.z_bool = self.PID_ON
+
+            self.x_linear = self.system_position[0]
+            self.y_linear = self.system_position[1]
+            self.z_linear = self.maintain_altitude(altitude_goal)
+
+            if check_within_bounds(self.system_position[0], 0.1, 0) and check_within_bounds(self.system_position[1], 0.1, 0) > 0:
+                self.stance = self.LOGICAL_STANCE
+    ###################################
+
+    ###################################
+    def Object_Avoidence(self, altitude_goal):
+         pass
 
 
     ##########################################################################################
@@ -341,11 +353,40 @@ class Master():
     ##########################################################################################
 
     ###################################
+    def preflight(self):
+        rospy.loginfo("What is the Flow sensor XY Magnitude?: ")
+        rospy.loginfo(str(self.velocity_current_magnitude))
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Is PID running?: ")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Is Circle detect working with camera?: ")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Wiring Check... I2C")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Wiring Check... Battery")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Wiring Check... USB")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Area Check... Is it safe to fly?")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Battery voltage check")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Barrier Erected?: ")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Saftey Glasses on?: ")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        rospy.loginfo("Are you ready to die? ")
+        rospy.loginfo(str(raw_input("                                >>>")))
+        return
+
+    ###################################
     def safty_checks(self, count):
 
-        if (((count+1) % 5) == 1 or not (self.stance_previous == self.stance) or count < 10) and self.state_current.guided:
+        if (((count+1) % 5) == 1 or not (self.stance_previous == self.stance or count < 10)) and self.state_current.guided:
             rospy.loginfo("--------------------------------------")
             rospy.loginfo("count:                " +    str(count))
+            rospy.loginfo("Current position:   X:" + str(self.system_position[0]))
+            rospy.loginfo("Current position:   Y:" + str(self.system_position[1]))
             rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
             rospy.loginfo("Current altitude:     " +    str(self.altitude_current))
             rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
@@ -381,6 +422,15 @@ class Master():
         if not self.state_current.guided:
             self.stance = self.LOGICAL_STANCE
             self.program_index = 0
+
+
+        ################# Position tracking
+
+        change_in_time = int(time.time()) - self.old_time
+        self.old_time =  int(time.time())
+
+        self.system_position[0] += self.velocity_current.twist.linear.x * change_in_time
+        self.system_position[1] += self.velocity_current.twist.linear.y * change_in_time
     ###################################
 
     ###################################
@@ -390,12 +440,10 @@ class Master():
 
     ###################################
     def disarm(self):
-        while True:
-            rospy.logfatal("DISARM-DISARM-DISARM")
-            self.state_variable.armed = False
-            self.state_variable.guided = False
-            self.state_publisher.publish(self.state_variable)
-            quit()
+        rospy.logfatal("DISARM-DISARM-DISARM")
+        self.state_variable.armed = False
+        self.state_variable.guided = False
+        self.state_publisher.publish(self.state_variable)
     ###################################
 
     ##########################################################################################
@@ -404,7 +452,6 @@ class Master():
 
     ###################################
     def altitude_callback(self, IncomingData):
-
         if IncomingData.relative > 0.3 and IncomingData.relative < 20:
             self.altitude_current = ( IncomingData.relative )
         else:
@@ -431,7 +478,7 @@ class Master():
 
     ###################################
     def roomba_location_callback(self, roomba_location_pose_arrary):
-        previous_roomba_list = self.roomba_listp
+        previous_roomba_list = self.roomba_list
         self.roomba_list = []
         #the point message is dist in meteres
         #the orientation message is dist in pixles
@@ -444,6 +491,14 @@ class Master():
     ###################################
     def battery_callback(self, incoming_data):
         self.battery_voltage = incoming_data.voltage
+    ###################################
+
+    ###################################
+    def check_within_bounds(self, position, bound, goal):
+        if position < goal + bound and position > goal - bound:
+            return True
+        else:
+            return False
     ###################################
 
 ##########################################################################################

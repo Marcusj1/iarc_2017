@@ -8,9 +8,10 @@ from std_msgs.msg import Header
 from std_msgs.msg import *
 from sensor_msgs.msg import *
 import math
-
 # Edited on Dec 1 2016 by JJ
 # fixed altitude not being a float issue
+
+from cv_bridge import CvBridge
 
 
 class CircleDetect():
@@ -18,7 +19,9 @@ class CircleDetect():
     def __init__(self):
         # Create a publisher for acceleration data
         self.pub = rospy.Publisher('/roomba/location_meters', PoseArray, queue_size=10)
-        self.rate = rospy.Rate(10)  # 5 hz?
+        self.image_pub = rospy.Publisher('/roomba/image',Image, queue_size=10)
+        self.bridge = CvBridge()
+        self.rate = rospy.Rate(2)  # 5 hz?
         # For finding radius
         self.a = 391.3
         self.b = -0.9371
@@ -100,12 +103,16 @@ class CircleDetect():
             #########################
 
             # for visulization:
-            cv2.imshow("output", np.hstack([img, output]))
+            #cv2.imwrite("/output.jpg", np.hstack([img, output]))
+            image_message = Image()
+            image_message = self.bridge.cv2_to_imgmsg(np.hstack([img, output]), encoding="passthrough")
+            self.image_pub.publish(image_message)
+            #cv2.imwrite("~/catkin_ws/src/iarc_2015/src/iarc_2017/webcam_recording/"+str(time)+".png", np.hstack([img, output]))
 
             # exit condition to leave the loop
-            k = cv2.waitKey(30) & 0xff
-            if k == 27:
-                break
+            #k = cv2.waitKey(30) & 0xff
+            #if k == 27:
+            #    break
 
             ###############################################################
             ##############################Publisher########################
@@ -140,8 +147,7 @@ class CircleDetect():
     def flownar(self, IncomingData):
 
         if not IncomingData.range == 0:
-            self.alt = IncomingData.range -0.05
-            print("-----------------------------------"+str(self.alt))
+            self.alt = IncomingData.range
     ###################################
 
 if __name__ == '__main__':

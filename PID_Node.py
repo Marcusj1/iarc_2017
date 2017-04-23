@@ -3,54 +3,71 @@ import rospy
 from PIDClass import PID
 from geometry_msgs.msg import TwistStamped
 from std_msgs.msg import Float64MultiArray
+import time
 
 
 # Author: JJ Marcus
 
-class Master():
+class Master:
     def __init__(self):
         print('init')
         ############# Create PID's for each linear dimension of the quadcopter
-        self.X_POSITION_PID = PID( 0.3, 0.1, 0, 1/4, 5)
-        self.Y_POSITION_PID = PID( 0.3, 0.1, 0, 1/4, 5)
-        self.Z_POSITION_PID = PID( 0.3, 0.1, 0, 1/3, 5)
+        self.X_POSITION_PID = PID( 1.20, 0.45, 0, 0.55,  5)
+        self.Y_POSITION_PID = PID( 1.20, 0.45, 0, 0.55,  5)
+        self.Z_POSITION_PID = PID( 1.20, 0.01, 0,   .5, 10)
 
-        self.X_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
-        self.Y_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
-        self.Z_VELOCITY_PID = PID( 1, 0.1, 0, 4, 10)
+        self.X_VELOCITY_PID = PID( 1.0, 0.05, 0,   .5, 10)
+        self.Y_VELOCITY_PID = PID( 1.0, 0.05, 0,   .5, 10)
+        self.Z_VELOCITY_PID = PID( 1.0, 0.01, 0,   .5, 10)
 
         rospy.Subscriber("/Master/control/error", Float64MultiArray, self.pid_subscriber_callback)
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
 
-
         self.velocity_publisher = rospy.Publisher('mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
 
         self.offset_vector = [ 0 , 0 , 0 ]
-        self.velocity_vector = TwistStamped
+        self.velocity_vector = TwistStamped()
 
         self.count = 0
-
+        self.Recieved_Data = False
+        self.rate = rospy.Rate(10)
         self.main()
 
     def main(self):
+        self.old_time =rospy.get_time()
+        while self.Recieved_Data == False:
+            pass
         while not rospy.is_shutdown():
             dt = rospy.get_time() - self.old_time
             self.oldtime = rospy.get_time()
+            rospy.logwarn(    "Mission time  :" + str(self.IncomingData[6]) + "----------------")
 
-            if self.IncomingData[0] == 0:
-                x_vel = self.X_VELOCITY_PID(self.IncomingData[3], self.velocity_current.twist.x)
+            if self.IncomingData[0]  == 0:
+                x_vel = self.X_VELOCITY_PID.run(self.IncomingData[3], self.velocity_current.twist.linear.x)
+                rospy.logwarn("X Velocity PID:   " + str(x_vel))
             else:
-                x_vel = self.X_POSITION_PID(self.IncomingData[3], 0)
+                x_vel = self.X_POSITION_PID.run(self.IncomingData[3], 0)
+                rospy.logwarn("X Position PID:   " + str(x_vel))
 
             if self.IncomingData[1] == 0:
-                y_vel = self.Y_VELOCITY_PID(self.IncomingData[4], self.velocity_current.twist.y)
+                y_vel = self.Y_VELOCITY_PID.run(self.IncomingData[4], self.velocity_current.twist.linear.y)
+                rospy.logwarn("Y Velocity PID:   " + str(y_vel))
             else:
-                y_vel = self.Y_POSITION_PID(self.IncomingData[4], 0)
+                y_vel = self.Y_POSITION_PID.run(self.IncomingData[4], 0)
+                rospy.logwarn("Y Position PID:   " + str(y_vel))
 
             if self.IncomingData[2] == 0:
-                z_vel = self.Z_VELOCITY_PID(self.IncomingData[5], self.velocity_current.twist.z)
+                z_vel = self.Z_VELOCITY_PID.run(self.IncomingData[5], self.velocity_current.twist.linear.z)
+                rospy.logwarn("Z Velocity PID:   " + str(z_vel))
             else:
-                z_vel = self.Z_POSITION_PID(self.IncomingData[5], 0)
+                z_vel = self.Z_POSITION_PID.run(self.IncomingData[5], 0)
+                rospy.logwarn("Z Position PID:   " + str(z_vel))
+
+
+
+            #rospy.loginfo("incoming data: " + str(self.IncomingData))
+            #rospy.loginfo("outgoing data: " + str(x_vel) + ", " + str(y_vel) + ", "+ str(z_vel))
+            self.rate.sleep()
 
             x_ang = 0
             y_ang = 0
@@ -70,10 +87,10 @@ class Master():
             self.velocity_vector.twist.angular.z = z_ang
 
             # Get the time now for the velocity commands
-            time = rospy.Time.now()
-            self.velocity_vector.header.stamp.secs = int(time.to_sec())
-            self.velocity_vector.header.stamp.nsecs = int((time.to_sec() - int(time.to_sec())) * 1000000000)
-            self.velocity_vector.header.seq = self.count
+            #clock = rospy.time.now()
+            #self.velocity_vector.header.stamp.secs = int(clock.to_sec())
+            #self.velocity_vector.header.stamp.nsecs = int((clock.to_sec() - int(clock.to_sec())) * 1000000000)
+            #self.velocity_vector.header.seq = self.count
 
             # use the publisher
             self.velocity_publisher.publish(self.velocity_vector)
@@ -85,8 +102,8 @@ class Master():
 
     ##################################
     def pid_subscriber_callback(self, IncomingData):
-        self.count += 1
-        self.IncomingData = IncomingData.data()
+        self.Recieved_Data = True
+        self.IncomingData = IncomingData.data
     ##################################
 
    ###################################
