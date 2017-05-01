@@ -31,19 +31,27 @@ class LidarSub():
 
     def subscriber(self, data):
         print("data-------------")
-        i = 0
-        avoidanceranges = Float64MultiArray()
-        avoidanceangles = Float64MultiArray()
+        i = 1
+        avoidance_ranges = Float64MultiArray()
+        avoidance_angles = Float64MultiArray()
         n = 0
         while i < len(data.ranges) -1:
             if data.ranges[i] < 1.3 and data.ranges[i] > .5: #max and min distance for sight of Lidar
                 if data.ranges[i] < data.ranges[i+1] and data.ranges[i] < data.ranges[i-1]:
-                    avoidanceranges.data.append(data.ranges[i])
-                    avoidanceangles.data.append(i*0.01745*180/3.1415)
-                    print(str(avoidanceranges.data[n])+ "   "+ str(avoidanceangles.data[n]))
+                    avoidance_ranges.data.append(data.ranges[i])
+                    avoidance_angles.data.append(i*0.01745*180/3.1415)
                     n += 1
+                    i += 10
             i += 1
-        self.avoidanglesPublisher.publish(avoidanceangles)
+
+        avoidance_ranges.data, avoidance_angles.data = (list(x) for x in zip(*sorted(zip(avoidance_ranges.data, avoidance_angles.data), key = lambda pair: pair[0])))
+
+
+
+        print(avoidance_ranges.data)
+        print(avoidance_angles.data)
+
+        self.avoidanglesPublisher.publish(avoidance_angles)
 
 if __name__ == '__main__':
     #initate the node

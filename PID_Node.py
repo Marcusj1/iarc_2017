@@ -12,18 +12,25 @@ class Master:
     def __init__(self):
         print('init')
         ############# Create PID's for each linear dimension of the quadcopter
-        self.X_POSITION_PID = PID( 1.20, 0.45, 0, 0.55,  5)
-        self.Y_POSITION_PID = PID( 1.20, 0.45, 0, 0.55,  5)
-        self.Z_POSITION_PID = PID( 1.20, 0.01, 0,   .5, 10)
+        self.X_POSITION_PID = PID( 1.20, 0.8, 0,   1,  5)
+        self.Y_POSITION_PID = PID( 1.20, 0.8, 0,   1,  5)
+        self.Z_POSITION_PID = PID( 2.00, 0.50, 0,   0.6, 10)
 
-        self.X_VELOCITY_PID = PID( 1.0, 0.05, 0,   .5, 10)
-        self.Y_VELOCITY_PID = PID( 1.0, 0.05, 0,   .5, 10)
-        self.Z_VELOCITY_PID = PID( 1.0, 0.01, 0,   .5, 10)
+        self.X_VELOCITY_PID = PID( 1.0, 0.05, 0.1,   1, 10)
+        self.Y_VELOCITY_PID = PID( 1.0, 0.05, 0.1,   1, 10)
+        self.Z_VELOCITY_PID = PID( 2.0, 0.01, 0.1,   1, 10)
 
         rospy.Subscriber("/Master/control/error", Float64MultiArray, self.pid_subscriber_callback)
         rospy.Subscriber("mavros/local_position/velocity",  TwistStamped,   self.local_position_velocity_callback)
 
+
         self.velocity_publisher = rospy.Publisher('mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
+
+        #guessing at position,this is expiremental
+        self.position_publisher= rospy.Publisher('PID_Node/position_guess', Float64MultiArray, queue_size=10)
+        self.position_guess = Float64MultiArray()
+        self.position_guess.data.append(0)
+        self.position_guess.data.append(1)
 
         self.offset_vector = [ 0 , 0 , 0 ]
         self.velocity_vector = TwistStamped()
@@ -40,7 +47,7 @@ class Master:
         while not rospy.is_shutdown():
             dt = rospy.get_time() - self.old_time
             self.oldtime = rospy.get_time()
-            rospy.logwarn(    "Mission time  :" + str(self.IncomingData[6]) + "----------------")
+            rospy.logwarn(   "Mission time  :" + str(self.IncomingData[6]) + "----------------")
 
             if self.IncomingData[0]  == 0:
                 x_vel = self.X_VELOCITY_PID.run(self.IncomingData[3], self.velocity_current.twist.linear.x)
@@ -86,13 +93,10 @@ class Master:
             self.velocity_vector.twist.angular.y = y_ang
             self.velocity_vector.twist.angular.z = z_ang
 
-            # Get the time now for the velocity commands
-            #clock = rospy.time.now()
-            #self.velocity_vector.header.stamp.secs = int(clock.to_sec())
-            #self.velocity_vector.header.stamp.nsecs = int((clock.to_sec() - int(clock.to_sec())) * 1000000000)
-            #self.velocity_vector.header.seq = self.count
-
+            self.position_guess.data[0] += self.velocity_current.twist.linear.x +0.707106781*(self.Y_VELOCITY_PID.integral- self.X_VELOCITY_PID.integral)
+            self.position_guess.data[1] += self.velocity_current.twist.linear.y +0.707106781*(self.Y_VELOCITY_PID.integral+ self.X_VELOCITY_PID.integral)
             # use the publisher
+            self.position_publisher.publish(self.position_guess)
             self.velocity_publisher.publish(self.velocity_vector)
 
 
@@ -103,12 +107,22 @@ class Master:
     ##################################
     def pid_subscriber_callback(self, IncomingData):
         self.Recieved_Data = True
-        self.IncomingData = IncomingData.data
+        Data = list(IncomingData.data)
+        Data[3], Data[4] = self.main_to_act_refrence_frame(Data[3], Data[4])
+        self.IncomingData = Data
     ##################################
 
-   ###################################
+    ###################################
     def local_position_velocity_callback(self,velocity_current):
+        #velocity_current.twist.linear.x, velocity_current.twist.linear.y = self.main_to_act_refrence_frame(velocity_current.twist.linear.x, velocity_current.twist.linear.y)
         self.velocity_current = velocity_current
+    ###################################
+
+    ###################################
+    def main_to_act_refrence_frame(self,velocity_in_x, velocity_in_y):
+        velocity_out_x = 0.707106781*(-velocity_in_x + velocity_in_y)
+        velocity_out_y = 0.707106781*( velocity_in_x + velocity_in_y)
+        return velocity_out_x, velocity_out_y
     ###################################
 
 

@@ -18,7 +18,7 @@ class CircleDetect():
     def __init__(self):
         # Create a publisher for acceleration data
         self.pub = rospy.Publisher('/roomba/location_meters', PoseArray, queue_size=10)
-        self.rate = rospy.Rate(10)  # 5 hz?
+        self.rate = rospy.Rate(10)  # needs to be runing fairly fast
         # For finding radius
         self.a = 391.3
         self.b = -0.9371
@@ -38,9 +38,12 @@ class CircleDetect():
         #rospy.Subscriber("mavros/altitude",Altitude,self.altitude_callback)
         rospy.Subscriber("mavros/px4flow/ground_distance",  Range,   self.flownar)
 
+        rospy.Subscriber("master/mission_time", Float32, self.callback_for_time)
+
         self.loop_search()
 
     def loop_search(self):
+        self.previous_time = rospy.Time.now()
         while not rospy.is_shutdown():
 
             # read frame from capture
@@ -93,19 +96,20 @@ class CircleDetect():
             self.roomba_array.header.stamp.nsecs = int((time.to_sec() - int(time.to_sec())) * 1000000000)
             self.roomba_array.poses = self.pose_array
             #roomba_locations = PoseArray( self.header,self.pose_array)
-            print('------------')
+            print('------------' + str(int(str(self.previous_time -time))/100000000))
+            self.previous_time = time
 
             #########################
             # show the output image #
             #########################
 
             # for visulization:
-            cv2.imshow("output", np.hstack([img, output]))
+            #cv2.imshow("output", np.hstack([img, output]))
 
             # exit condition to leave the loop
-            k = cv2.waitKey(30) & 0xff
-            if k == 27:
-                break
+            #k = cv2.waitKey(30) & 0xff
+            #if k == 27:
+            #   break
 
             ###############################################################
             ##############################Publisher########################
@@ -116,32 +120,20 @@ class CircleDetect():
             #self.rospy.spin()
             self.rate.sleep()
 
-        cv2.destroyAllWindows()
-        self.cap.release()
-
-    ################################### FLOWNAR callback took this place
-    def altitude_callback(self, IncomingData):
-        IncomingData = [0,0,0,0,0]
-        IncomingData[0] = data.monotonic
-        IncomingData[1] = data.amsl
-        IncomingData[2] = data.relative
-        IncomingData[3] = data.terrain
-        IncomingData[4] = data.bottom_clearance
-
-        if IncomingData[2] > 0.3 and IncomingData[2] < 20:
-            self.alt = ( IncomingData[2] )
-        else:
-            self.alt = ( IncomingData[1] - IncomingData[3] )
-
-        return
-    ###################################
+        #cv2.destroyAllWindows()
+        #self.cap.release()
 
     ###################################
     def flownar(self, IncomingData):
 
         if not IncomingData.range == 0:
             self.alt = IncomingData.range -0.05
-            print("-----------------------------------"+str(self.alt))
+            #print("-----------------------------------"+str(self.alt))
+    ###################################
+    ###################################
+    def callback_for_time(self, mission_time):
+        if mission_time.data % 10 == 0:
+            print("Mission time: " + str(mission_time.data))
     ###################################
 
 if __name__ == '__main__':

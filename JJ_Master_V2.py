@@ -24,6 +24,9 @@ class Master():
             [ 4 ],
             [ 5 ],
             [ 2 ],
+            [ 4 ],
+            [ 5 ],
+            [ 2 ],
             [ 1 ],
             [ 3 ],
         ]
@@ -58,7 +61,7 @@ class Master():
         rospy.Subscriber("mavros/px4flow/ground_distance",  Range,          self.flownar)
        #rospy.Subscriber("mavros/altitude",                 Altitude,       self.altitude_callback)
         rospy.Subscriber("/mavros/state",                   State,          self.state_callback)
-        rospy.Subscriber("/roomba/location_meters",         PoseArray,      self.roomba_location_callback)
+        rospy.Subscriber("/Vision/roomba_location_meters",         PoseArray,      self.roomba_location_callback)
         rospy.Subscriber("/mavros/battery",                 BatteryStatus,  self.battery_callback)
         ################
 
@@ -91,6 +94,10 @@ class Master():
         self.countdown = 5
         self.system_position = [0, 0]
         self.old_time = int(time.time())
+        ################
+        self.mission_time_publisher = rospy.Publisher('master/mission_time', Float32, queue_size=10)
+        self.mission_time = Float32()
+
         ################
         self.rate = rospy.Rate(10)
         time.sleep(1)
@@ -133,13 +140,13 @@ class Master():
                 self.hover_over_roomba(0.55)
 
             elif self.stance == self.LAND_OVER_ROOMBA:
-                self.Land_Over_Roomba()
+                self.Land_Over_Roomba(0.55)
 
             elif self.stance == self.LEFT_RIGHT_SLIDE:
-                self.Left_Right_Slide(0.45)
+                self.Left_Right_Slide(0.55)
 
             elif self.stance == self.RETURN_HOME:
-                self.Left_Right_Slide(0.45)
+                self.Left_Right_Slide(0.55)
 
 
             self.master_to_pid_vector.data[0] =   self.x_bool
@@ -153,6 +160,9 @@ class Master():
             self.rate.sleep()
 
             self.master_to_pid_publisher.publish(self.master_to_pid_vector)
+
+            self.mission_time.data = count
+            self.mission_time_publisher.publish(self.mission_time)
 
     ###################################
 
@@ -174,6 +184,7 @@ class Master():
 
         self.x_bool = self.PID_OFF
         self.y_bool = self.PID_OFF
+        self.z_bool = self.PID_OFF
         self.z_bool = self.PID_OFF
 
         self.x_linear = 0
@@ -242,16 +253,17 @@ class Master():
             self.z_bool = self.PID_ON
             #rospy.loginfo(str(self.roomba_list))
             self.x_linear = self.roomba_list[0][0]
-            self.y_linear = -self.roomba_list[0][1]
+            self.y_linear = self.roomba_list[0][1]
             #rospy.loginfo(str(self.roomba_list))
-            if self.roomba_list[0][2] < 0.2:
+            if self.roomba_list[0][2] < 0.1:
                 rospy.loginfo("I am over roomba, switching stane in : " + str(self.countdown))
                 self.countdown -= 0.1
                 if self.countdown < 0:
                    rospy.loginfo("Currently over roomba")
+                   self.stance = self.LOGICAL_STANCE
 
                 # This is for the endurence test
-                if self.battery_voltage < 14.5:
+                if self.battery_voltage < 13.5:
                      self.stance = self.LOGICAL_STANCE
 
             else:
@@ -271,13 +283,13 @@ class Master():
     ###################################
 
     ###################################
-    def Land_Over_Roomba(self):
+    def Land_Over_Roomba(self,hover_alt):
         if len(self.roomba_list) > 0:
             self.x_bool = self.PID_ON
             self.y_bool = self.PID_ON
             self.z_bool = self.PID_OFF
 
-            self.x_linear = -self.roomba_list[0][0]
+            self.x_linear = self.roomba_list[0][0]
             self.y_linear = self.roomba_list[0][1]
 
             if self.roomba_list[0][2] < 0.15:
@@ -285,23 +297,22 @@ class Master():
             if self.altitude_current < 0.4:
                 rospy.loginfo("Switching to logical")
                 self.stance = self.LOGICAL_STANCE
-
             self.z_linear   = -0.2
-            self.countdown  =  3
+            self.countdown  =  1
         else:
             rospy.loginfo("Roomba Lost ...")
             self.countdown -= 0.1
 
             if self.countdown < 0:
                  self.stance = self.LOGICAL_STANCE
-                 self.program_index = 0
+                 self.program_index = 1
             self.x_bool = self.PID_OFF
             self.y_bool = self.PID_OFF
             self.z_bool = self.PID_ON
 
             self.x_linear = 0
             self.y_linear = 0
-            self.z_linear = self.maintain_altitude(0.3)
+            self.z_linear = self.maintain_altitude(hover_alt)
 
     ###################################
     def Left_Right_Slide(self, altitude_goal):
@@ -311,16 +322,12 @@ class Master():
             if self.countdown < -2:
                 self.countdown = 2
 
-            if len(self.roomba_list) > 0:
-                self.stance = self.LOGICAL_STANCE
-
-
-            self.y_bool = self.PID_OFF
             self.x_bool = self.PID_OFF
+            self.y_bool = self.PID_OFF
             self.z_bool = self.PID_ON
 
             self.y_linear = 0
-            self.x_linear = -0.15 * self.countdown / abs(self.countdown)
+            self.x_linear = -0.1 * self.countdown / abs(self.countdown)
             self.z_linear = self.maintain_altitude(altitude_goal)
 
             if len(self.roomba_list) > 0:
@@ -385,8 +392,6 @@ class Master():
         if (((count+1) % 5) == 1 or not (self.stance_previous == self.stance or count < 10)) and self.state_current.guided:
             rospy.loginfo("--------------------------------------")
             rospy.loginfo("count:                " +    str(count))
-            rospy.loginfo("Current position:   X:" + str(self.system_position[0]))
-            rospy.loginfo("Current position:   Y:" + str(self.system_position[1]))
             rospy.loginfo("Current stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
             rospy.loginfo("Current altitude:     " +    str(self.altitude_current))
             rospy.loginfo("Current ground speed: " +    str(self.velocity_current_magnitude))
@@ -428,9 +433,6 @@ class Master():
 
         change_in_time = int(time.time()) - self.old_time
         self.old_time =  int(time.time())
-
-        self.system_position[0] += self.velocity_current.twist.linear.x * change_in_time
-        self.system_position[1] += self.velocity_current.twist.linear.y * change_in_time
     ###################################
 
     ###################################
@@ -460,7 +462,6 @@ class Master():
 
     ###################################
     def flownar(self, IncomingData):
-
         if not IncomingData.range == 0:
             self.altitude_current = IncomingData.range
     ###################################
@@ -512,16 +513,3 @@ if __name__ == '__main__':
         test = Master()
     except rospy.ROSInterruptException:
         pass
-
-
-''' Useful bits of code that'll never be used: (maybe)'
-
-
-            rospy.loginfo("Foward PID: " + str(self.x_bool))
-            rospy.loginfo("Foward    : " + str(self.x_linear))
-            rospy.loginfo("Right PID : " + str(self.y_bool))
-            rospy.loginfo("Right     : " + str(self.y_linear))
-            rospy.loginfo("UP PID    : " + str(self.x_bool))
-            rospy.loginfo("UP        : " + str(-self.z_linear))
-
-'''
