@@ -23,12 +23,12 @@ class PID:
 
         # Sets the  integral
         self.integral += error * dt
-
         self.integral = self.magnitude_limits( self.integral, self.maximum_integral)
 
 
-        if dt > 1 and abs(self.pervious_error - error) > 0.1:
+        if dt > 1: #or abs(self.pervious_error - error) > 0.19:
             self.integral = 0
+            print("Reset I portion")
 
         # Sets the derivative
         derivative = (error - self.previous_error) / dt
@@ -37,7 +37,7 @@ class PID:
             self.goal = goal
 
         # Adjusts the output by the constants P, I, and D
-        print("                                    " + str(error) + '  |  ' + str(self.integral ) + '  |  ' + str(derivative))
+        #print("                                    " + str(error) + '  |  ' + str(self.integral ) + '  |  ' + str(derivative))
         print("                                    " + str(error*self.KP) + '  |  ' + str(self.integral*self.KI) + '  |  ' + str(derivative*self.KD))
         output = ( self.KP * error ) + ( self.KI * self.integral ) + ( self.KD * derivative )
         output = self.magnitude_limits(output, self.maximum_magnitude)

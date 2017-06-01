@@ -34,7 +34,7 @@ class Master():
 
         self.LOGICAL_STANCE    =    0
         self.LAND              =    1
-        self.TAKOFF            =    2
+        self.TAKEOFF           =    2
         self.STANCE_DISARM     =    3
         self.HOVER_OVER_ROOMBA =    4
         self.LAND_OVER_ROOMBA  =    5
@@ -53,37 +53,12 @@ class Master():
         self.program = [
             [ self.LOGICAL_STANCE ],
             [ self.LOGICAL_STANCE ],
-            [ self.TAKOFF ],
-            #[ self.ENTER_THE_ARENA ],
-
-            #compleating the square
+            [ self.TAKEOFF ],
             [ self.WAIT ],
-            [ self.LEFT ],
-            [ self.WAIT ],
-            [ self.BACKWARD ],
-            [ self.WAIT ],
-            [ self.RIGHT ],
             [ self.WAIT ],
             [ self.FORWARD ],
             [ self.WAIT ],
-
-
-            #compleating the square
-            [ self.LEFT ],
-            [ self.BACKWARD ],
-            [ self.RIGHT ],
-            [ self.FORWARD ],
-
-
-            #compleating the square
-            [ self.LEFT ],
-            [ self.BACKWARD ],
-            [ self.RIGHT ],
-            [ self.FORWARD ],
-
-            #go back 1 m and return home
-            [ self.BACKWARD ],
-            [ self.LAND  ],
+            [ self.LAND ],
             [ self.STANCE_DISARM ]
         ]
         self.program_index = -1
@@ -109,8 +84,10 @@ class Master():
         self.master_to_pid_vector.data.append(0)
         self.master_to_pid_vector.data.append(0)
 
-        self.PID_POSITIONAL  = 1 # Position control
-        self.PID_VELOCITY = 0 # Velocity control (still is pid'd right now)
+        self.PID_POSITIONAL                 =  1 # Position control
+        self.PID_VELOCITY                   =  0 # Velocity control
+        self.PID_VELOCITY_INTEGRAL_RESET    = -1 # Velocity control, SET INTEGRAL TO 0
+
 
 
         self.x_velocity_offset = 0
@@ -158,46 +135,46 @@ class Master():
             self.safty_checks(count)
 
             if   self.stance == self.LOGICAL_STANCE:
-                self.Logical_Stance()
+                self.Logical_Stance(0.655)
 
             elif self.stance == self.LAND:
                 self.Land()
 
-            elif self.stance == self.TAKOFF:
-                self.Takeoff(0.55)
+            elif self.stance == self.TAKEOFF:
+                self.Takeoff(0.655)
 
             elif self.stance == self.STANCE_DISARM:
                 self.Stance_Disarm()
 
             elif self.stance == self.HOVER_OVER_ROOMBA:
-                self.hover_over_roomba(0.55)
+                self.hover_over_roomba(0.655)
 
             elif self.stance == self.LAND_OVER_ROOMBA:
-                self.Land_Over_Roomba(0.55)
+                self.Land_Over_Roomba(0.655)
 
             elif self.stance == self.LEFT_RIGHT_SLIDE:
-                self.Left_Right_Slide(0.55)
+                self.Left_Right_Slide(0.655)
 
             elif self.stance == self.RETURN_HOME:
-                self.Return_Home(0.55)
+                self.Return_Home(0.655)
 
             elif self.stance == self.ENTER_THE_ARENA:
-                self.Enter_The_Arena(0.55)
+                self.Enter_The_Arena(0.655)
 
             elif self.stance == self.FORWARD:
-                self.Forward(0.55)
+                self.Forward(0.655)
 
             elif self.stance == self.BACKWARD:
-                self.Backward(0.55)
+                self.Backward(0.655)
 
             elif self.stance == self.LEFT:
-                self.Left(0.55)
+                self.Left(0.655)
 
             elif self.stance == self.RIGHT:
-                self.Right(0.55)
+                self.Right(0.655)
 
             elif self.stance == self.WAIT:
-                self.Wait(0.55)
+                self.Wait(0.655)
 
 
             self.master_to_pid_vector.data[0] =   self.x_bool
@@ -222,7 +199,7 @@ class Master():
     ##########################################################################################
 
     ###################################
-    def Logical_Stance(self):
+    def Logical_Stance(self, goal):
 
         if self.program_index > len(self.program) or self.program_index < 0:
             self.stance = self.LAND
@@ -234,14 +211,13 @@ class Master():
         self.countdown = 0
 
 
-        self.x_bool = self.PID_VELOCITY
-        self.y_bool = self.PID_VELOCITY
-        self.z_bool = self.PID_VELOCITY
-        self.z_bool = self.PID_VELOCITY
+        self.x_bool = self.PID_VELOCITY#_INTEGRAL_RESET
+        self.y_bool = self.PID_VELOCITY#_INTEGRAL_RESET
+        self.z_bool = self.PID_POSITIONAL
 
         self.x_linear = 0
         self.y_linear = 0
-        self.z_linear = 0
+        self.z_linear = self.maintain_altitude(goal)
     ###################################
 
     ###################################
@@ -256,9 +232,9 @@ class Master():
         else:
             self.countdown = 1
 
-        if self.altitude_current < 0.4 and self.countdown < 0:
+        if self.altitude_current < 0.4:# and self.countdown < 0:
             self.stance = self.LOGICAL_STANCE
-            self.disarm()
+            #self.disarm()
 
         self.x_bool = self.PID_VELOCITY
         self.y_bool = self.PID_VELOCITY
@@ -294,7 +270,8 @@ class Master():
 
         self.x_linear = 0
         self.y_linear = 0
-        self.z_linear = -9000
+        self.z_linear = 9
+        rospy.logwarn("KILL MEEEEEEEEEE")
         self.disarm()
     ###################################
 
@@ -425,15 +402,23 @@ class Master():
 
             self.countdown  -= 0.1
 
-            if self.countdown < -2.5:
-                self.stance = self.LOGICAL_STANCE
-
             self.y_bool = self.PID_VELOCITY
             self.x_bool = self.PID_VELOCITY
             self.z_bool = self.PID_POSITIONAL
-            self.x_linear = 0.4
+            self.x_linear = 0
             self.y_linear = 0
             self.z_linear = self.maintain_altitude(altitude_goal)
+
+
+            if self.countdown > -1.5:
+                self.x_linear = -4/9 * self.countdown
+
+            elif self.countdown <= -1.5:
+                self.x_linear = 4/3+ 4/9 * self.countdown
+
+            if self.countdown < -3:
+                self.stance = self.LOGICAL_STANCE
+
     ###################################
 
     ###################################
@@ -457,7 +442,7 @@ class Master():
 
             self.countdown  -= 0.1
 
-            if self.countdown < -2.5:
+            if self.countdown < -1.5:
                 self.stance = self.LOGICAL_STANCE
 
             self.y_bool = self.PID_VELOCITY
@@ -474,14 +459,14 @@ class Master():
 
             self.countdown  -= 0.1
 
-            if self.countdown < -2.5:
+            if self.countdown < -1.5:
                 self.stance = self.LOGICAL_STANCE
 
             self.y_bool = self.PID_VELOCITY
             self.x_bool = self.PID_VELOCITY
             self.z_bool = self.PID_POSITIONAL
-            self.x_linear = 0.4
-            self.y_linear = 0
+            self.x_linear = 0
+            self.y_linear = 0.4
             self.z_linear = self.maintain_altitude(altitude_goal)
     ###################################
 
@@ -541,18 +526,22 @@ class Master():
     ###################################
     def safty_checks(self, count):
 
+        change_in_time = int(time.time()) - self.old_time
+        self.old_time =  int(time.time())
+
+
         if (((count+1) % 5) == 1 or not (self.stance_previous == self.stance or count < 10)) and self.state_current.guided:
             rospy.loginfo("--------------------------------------")
             rospy.loginfo("count:                " +    str(count))
             rospy.loginfo("stance:       " +    str(self.stance_names[self.stance]) + ": " + str(self.stance) + ", program: " + str(self.program_index))
             rospy.loginfo("altitude:     " +    str(self.altitude_current))
             rospy.loginfo("ground speed: " +    str(self.velocity_current_magnitude))
-            rospy.loginfo("voltage:      " +    str(self.battery_voltage))
-            rospy.logwarn("Countdown:    " +    str(self.countdown))
+            #rospy.loginfo("voltage:      " +    str(self.battery_voltage))
+            #rospy.logwarn("Countdown:    " +    str(self.countdown))
 
 
-            if self.battery_voltage < 14:
-                rospy.logwarn("WARNING BATTERY VOLTAGE LOW")
+            #if self.battery_voltage < 14:
+            #    rospy.logwarn("WARNING BATTERY VOLTAGE LOW")
 
             if self.altitude_current > 3:
                 rospy.logwarn("WARNING ALTITUDE TOO HIGH")
@@ -562,13 +551,13 @@ class Master():
             rospy.logwarn("WARNING BATTERY VOLTAGE: LANDING")
             self.stance = self.LAND
 
-        if self.battery_voltage < 10:
-            rospy.logfatal("BATTERY VOLTAGE TOO LOW: DISARMING")
-            self.disarm()
+            if self.battery_voltage < 10:
+                rospy.logfatal("BATTERY VOLTAGE TOO LOW: DISARMING")
+                self.disarm()
 
-        if self.velocity_current_magnitude > 100:
-            rospy.logfatal("TOO HIGH VELOCITY DETECTED: DISARMING")
-            self.disarm()
+        #if self.velocity_current_magnitude > 100:
+        #    rospy.logfatal("TOO HIGH VELOCITY DETECTED: DISARMING")
+        #    self.disarm()
 
         if self.altitude_current > 4 :
             rospy.logfatal("ALTITUDE TOO HIGH: DISARMING")
@@ -581,11 +570,6 @@ class Master():
             self.stance = self.LOGICAL_STANCE
             self.program_index = 0
 
-
-        ################# Position tracking
-
-        change_in_time = int(time.time()) - self.old_time
-        self.old_time =  int(time.time())
     ###################################
 
     ###################################
@@ -598,7 +582,7 @@ class Master():
         rospy.logfatal("DISARM-DISARM-DISARM")
         self.state_variable.armed = False
         self.state_variable.guided = False
-        self.state_publisher.publish(self.state_variable)
+        #self.state_publisher.publish(self.state_variable)
     ###################################
 
     ##########################################################################################
